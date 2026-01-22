@@ -2,6 +2,8 @@ import json
 import ollama
 import sys
 from pathlib import Path
+from rich.console import Console
+from rich.markdown import Markdown
 
 # Add current directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -178,12 +180,17 @@ if __name__ == "__main__":
             result = assistant.query(query, verbose=True)
             
             print("\n🤖 Answer:\n")
-            print(result["answer"])
+
+            console = Console(force_terminal=True)
+            console.print(Markdown(result["answer"]))
             
             if result["sources"]:
                 print("\n📚 Sources:")
+                seen_sources = set()
                 for src in result["sources"]:
-                    print(f"  • {src}")
+                    if src not in seen_sources:
+                        print(f"  • {src}")
+                        seen_sources.add(src)
             
             if result["mcp_used"]:
                 print(f"\n🔧 Used MCP tool: {result['mcp_tool']}")
