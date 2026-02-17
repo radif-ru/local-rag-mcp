@@ -216,6 +216,7 @@ site/
 .AppleDouble
 .LSOverride
 Icon
+docs/
 
 # Windows
 $RECYCLE.BIN/
