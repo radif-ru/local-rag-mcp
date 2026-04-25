@@ -30,3 +30,9 @@ RRF_K = 60                # canonical Cormack & Clarke (2009) constant
 # Reranker: cross-encoder applied to the hybrid candidates, top_k=TOP_K kept.
 RERANK_ENABLED = True
 RERANKER_MODEL = "BAAI/bge-reranker-base"
+
+# Query expansion: LLM rewrites short / abbreviation-heavy queries
+# into a longer natural-language form. Original + expanded are both fed
+# into hybrid_retrieve and the two ranked lists are merged via RRF.
+QUERY_EXPANSION_ENABLED = True
+QUERY_EXPANSION_MIN_TOKENS = 4   # queries with <= this many tokens get expanded

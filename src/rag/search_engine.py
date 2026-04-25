@@ -43,6 +43,9 @@ from rank_bm25 import BM25Okapi
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import (  # noqa: E402
+    OLLAMA_MODEL,
+    QUERY_EXPANSION_ENABLED,
+    QUERY_EXPANSION_MIN_TOKENS,
     RERANK_ENABLED,
     RERANKER_MODEL,
     RRF_K,
@@ -245,24 +248,188 @@ def rerank(query: str, candidates: List[dict], top_k: int = TOP_K) -> List[dict]
 
 
 # ---------------------------------------------------------------------------
+# Query expansion (LLM rewrite for short / abbreviation-heavy queries)
+# ---------------------------------------------------------------------------
+
+_QUERY_EXPANSION_SYSTEM_PROMPT = (
+    "You expand short or abbreviated search queries into a longer, "
+    "topic-focused natural-language query. Return ONLY the expanded "
+    "query, without any preface or quotes."
+)
+
+
+def _looks_like_abbreviation(token: str) -> bool:
+    """Heuristic: is ``token`` an obvious acronym / numeric code?
+
+    Used as the secondary trigger for query expansion on multi-token
+    queries (the primary trigger is short query length). Lowercase tokens
+    are intentionally **not** treated as abbreviations here, otherwise
+    common stop-words like ``is`` / ``to`` / ``the`` falsely fire on
+    long natural queries.
+    """
+    if not token:
+        return False
+    stripped = token.strip(",.;:?!()[]{}\"'`")
+    if not stripped:
+        return False
+    if 2 <= len(stripped) <= 6 and stripped.isupper():
+        return True  # XSS, RBAC, JWT, OWASP
+    if 2 <= len(stripped) <= 4 and stripped.isdigit():
+        return True  # 401, 403, 404
+    return False
+
+
+def _should_expand(query: str) -> bool:
+    tokens = query.split()
+    if not tokens:
+        return False
+    if len(tokens) <= QUERY_EXPANSION_MIN_TOKENS:
+        return True
+    return any(_looks_like_abbreviation(tok) for tok in tokens)
+
+
+# Prefixes the LLM sometimes adds even though the system prompt forbids them.
+_EXPANSION_PREFIXES = (
+    "expand the query",
+    "expanded query",
+    "here is the expanded query",
+    "the expanded query is",
+    "expanded:",
+    "query:",
+)
+
+
+def _clean_expansion(text: str) -> str:
+    """Strip ``<think>`` blocks, code fences and chatty prefixes from the
+    LLM's expansion."""
+    import re
+
+    # Remove Qwen3-style thinking blocks.
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = text.replace("/think", " ").replace("/no_think", " ")
+
+    # Strip a single fenced code block, if present.
+    if text.strip().startswith("```"):
+        body = text.strip().split("```", 2)
+        if len(body) >= 2:
+            text = body[1]
+            if text.lower().startswith("text"):
+                text = text[4:]
+
+    # Use only the first non-empty line — the prompt asks for one query.
+    for line in text.splitlines():
+        candidate = line.strip().strip("`").strip("\"'").strip()
+        if candidate:
+            text = candidate
+            break
+    else:
+        return ""
+
+    # Drop chatty prefixes the LLM occasionally prepends.
+    lower = text.lower()
+    for prefix in _EXPANSION_PREFIXES:
+        if lower.startswith(prefix):
+            text = text[len(prefix):].lstrip(" :-—\"'")
+            break
+
+    return text.strip()
+
+
+def maybe_expand_query(query: str) -> tuple[str, Optional[str]]:
+    """Expand short / abbreviated queries via the local LLM.
+
+    Returns ``(original, expanded_or_None)``. ``expanded`` is ``None`` when
+    the activation heuristic does not fire, when expansion is disabled via
+    ``QUERY_EXPANSION_ENABLED``, or when the LLM call fails — in all of
+    these cases the caller falls back to the original query alone.
+    """
+    if not QUERY_EXPANSION_ENABLED:
+        return query, None
+    if not _should_expand(query):
+        return query, None
+
+    try:
+        import ollama
+
+        client = ollama.Client()
+        response = client.chat(
+            model=OLLAMA_MODEL,
+            messages=[
+                {"role": "system", "content": _QUERY_EXPANSION_SYSTEM_PROMPT},
+                # Qwen3 with thinking enabled hides its answer in <think>...</think>
+                # blocks; ``/no_think`` switches the model into direct mode.
+                {"role": "user", "content": f"{query}\n\n/no_think"},
+            ],
+            options={"temperature": 0.1, "num_predict": 200},
+        )
+        raw = response["message"]["content"]
+    except Exception:
+        return query, None
+
+    text = _clean_expansion(raw)
+    if not text or text == query:
+        return query, None
+    return query, text
+
+
+# ---------------------------------------------------------------------------
 # Public facade
 # ---------------------------------------------------------------------------
 
 
-def search(query: str, top_k: int = TOP_K) -> List[dict]:
+def search(query: str, top_k: int = TOP_K, *, verbose: bool = False) -> List[dict]:
     """Run the advanced search pipeline and return top-``top_k`` chunks.
 
     Stages:
 
-    1. ``hybrid_retrieve(query, TOP_K_HYBRID)`` — BM25 + Vector + RRF.
-    2. ``rerank(query, candidates, top_k)`` — cross-encoder rerank
+    1. :func:`maybe_expand_query` — optional LLM rewrite of short or
+       abbreviation-heavy queries.
+    2. :func:`hybrid_retrieve` — BM25 + Vector + RRF on the original
+       query, plus a second pass on the expanded query when available.
+       The two ranked lists are merged with another RRF pass.
+    3. :func:`rerank` — cross-encoder rerank of the merged candidates
        (skipped when ``RERANK_ENABLED`` is ``False``).
 
     Each returned dict carries ``text``, ``source``, ``chunk_id`` and a
     ``score`` field whose meaning depends on the last stage that ran
     (rerank logit if the reranker was used, RRF score otherwise).
     """
-    candidates = hybrid_retrieve(query, TOP_K_HYBRID)
+    original, expanded = maybe_expand_query(query)
+    if verbose and expanded:
+        print(f"🪄 expanded → \"{expanded}\"")
+
+    primary = hybrid_retrieve(original, TOP_K_HYBRID)
+    if expanded:
+        secondary = hybrid_retrieve(expanded, TOP_K_HYBRID)
+        # Index by (source, chunk_id) so we can re-merge the two ranked
+        # lists by chunk identity rather than by Python object identity.
+        keyed = {
+            (c.get("source"), c.get("chunk_id")): c
+            for c in (*primary, *secondary)
+        }
+        primary_keys = [(c.get("source"), c.get("chunk_id")) for c in primary]
+        secondary_keys = [(c.get("source"), c.get("chunk_id")) for c in secondary]
+        merged = _rrf_merge_keys([primary_keys, secondary_keys])[:TOP_K_HYBRID]
+        candidates = [
+            {**keyed[key], "score": float(rrf_score)}
+            for key, rrf_score in merged
+        ]
+    else:
+        candidates = primary
+
     if not RERANK_ENABLED:
         return candidates[:top_k]
-    return rerank(query, candidates, top_k)
+    return rerank(original, candidates, top_k)
+
+
+def _rrf_merge_keys(
+    ranked_lists: List[List[tuple]],
+    *,
+    k: int = RRF_K,
+) -> List[tuple[tuple, float]]:
+    """Generic RRF merge keyed by an arbitrary hashable identity."""
+    scores: dict[tuple, float] = {}
+    for ranked in ranked_lists:
+        for rank, key in enumerate(ranked, start=1):
+            scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank)
+    return sorted(scores.items(), key=lambda pair: pair[1], reverse=True)

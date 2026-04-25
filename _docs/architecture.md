@@ -117,6 +117,11 @@
 
 ## 4. Поток обработки одного запроса
 
+> С спринта 01 retrieval идёт через фасад `rag.search_engine.search`,
+> который объединяет три стадии (query expansion → hybrid BM25+vector с RRF
+> → cross-encoder rerank). Подробное описание стадий — в
+> [`rag-pipeline.md`](./rag-pipeline.md) § 9.
+
 ```
                                                        ┌──────────────────────────┐
 1) Пользователь вводит вопрос                          │  main.py: input()        │
@@ -128,13 +133,16 @@
                                                      └────────────┬─────────────┘
                                                                   │
                                 ┌─────────────────────────────────┤
-                                │ retrieve(user_query)            │
+                                │ search(user_query, verbose)     │
                                 ▼                                 │
-3) RAG-извлечение                                                 │
-     · model.encode([query])                                      │
-     · faiss.normalize_L2(emb)                                    │
-     · index.search(emb, TOP_K) → [chunks[i]]                     │
-                                                                  │
+3) Advanced retrieval                                             │
+     · maybe_expand_query → (original, expanded?)                 │
+     · hybrid_retrieve(original, TOP_K_HYBRID)   ← BM25 + Vector  │
+       └── при наличии expanded — повторный hybrid_retrieve       │
+           и RRF-объединение двух списков                         │
+     · rerank(query, candidates, TOP_K)          ← cross-encoder  │
+       (BAAI/bge-reranker-base, lazy load)                        │
+     · возвращает top-K чанков с полем score                      │
                                 ┌─────────────────────────────────┤
                                 │ _llm_decide_mcp_usage(...)      │
                                 ▼                                 │
