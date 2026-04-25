@@ -414,7 +414,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 ### Задача 3.3. Query Expansion (LLM rewrite)
 
-- **Статус:** ToDo
+- **Статус:** Progress
 - **Приоритет:** medium
 - **Объём:** M
 - **Зависит от:** Задача 3.2.
@@ -571,7 +571,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 | 2.1   | Утвердить спецификацию Advanced Pipeline                                                                                   | high      | XS    | Done   | 1.3        |
 | 3.1   | Hybrid Search (BM25 + Vector + RRF)                                                                                        | high      | M     | Done   | 2.1        |
 | 3.2   | Reranker (cross-encoder)                                                                                                   | high      | M     | Done   | 3.1        |
-| 3.3   | Query Expansion (LLM rewrite)                                                                                              | medium    | M     | ToDo   | 3.2        |
+| 3.3   | Query Expansion (LLM rewrite)                                                                                              | medium    | M     | Progress | 3.2      |
 | 3.4   | Переключить `CompanyKBAssistant` на новый фасад                                                                            | high      | S     | ToDo   | 3.3        |
 | 3.5   | Обновить документацию в `_docs/`                                                                                           | medium    | M     | ToDo   | 3.4        |
 | 3.6   | Перевести `README.md` и `src/README.md` на русский и актуализировать (возможно потребуется актуализировать и другие файлы) | medium    | M     | ToDo   | 3.5        |
