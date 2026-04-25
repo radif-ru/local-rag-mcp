@@ -1,9 +1,9 @@
 # Спринт 01. Advanced Search Pipeline
 
-- **Статус спринта:** Active
+- **Статус спринта:** Closed
 - **Ветка:** `feature/advanced-search-pipeline`
 - **Дата старта:** 2026-04-25
-- **Дата закрытия:** —
+- **Дата закрытия:** 2026-04-26
 - **Связанные документы:**
   - `../../_docs/rag-pipeline.md` § 6, § 9
   - `../../_docs/architecture.md` § 4
@@ -49,15 +49,15 @@
 
 Спринт считается закрытым, когда выполнены **все** условия:
 
-- [ ] Все коммиты спринта — в ветке `feature/advanced-search-pipeline`, ветка запушена.
-- [ ] `src/rag/search_engine.py` реализует `hybrid_retrieve`, `rerank`, `maybe_expand_query`, `search`; модуль импортируется без ошибок.
-- [ ] `CompanyKBAssistant.query` использует `search(...)`; контракт метода (`{answer, sources, mcp_used, mcp_tool}`) не изменён.
-- [ ] В консольном выводе при `verbose=True` видны `score` каждого найденного чанка (хотя бы на одном из этапов: hybrid и/или rerank).
-- [ ] `python main.py build-index` собирает индекс без ошибок; интерактивный режим отвечает без падений на 5 smoke-вопросах (минимум 2 — короткие/аббревиатурные).
-- [ ] Контракт MCP-инструментов не изменён (`src/mcp/server.py` не редактировался).
-- [ ] Обновлены: `_docs/rag-pipeline.md`, `_docs/architecture.md`, `_docs/configuration.md`, `_docs/current-state.md`, `_docs/roadmap.md` (закрытые пункты Phase 4).
-- [ ] `README.md` (корень) и `src/README.md` переведены на русский и отражают новый pipeline.
-- [ ] Все задачи спринта — в статусе `Done`, сводная таблица актуальна.
+- [x] Все коммиты спринта — в ветке `feature/advanced-search-pipeline`, ветка запушена.
+- [x] `src/rag/search_engine.py` реализует `hybrid_retrieve`, `rerank`, `maybe_expand_query`, `search`; модуль импортируется без ошибок.
+- [x] `CompanyKBAssistant.query` использует `search(...)`; контракт метода (`{answer, sources, mcp_used, mcp_tool}`) не изменён.
+- [x] В консольном выводе при `verbose=True` видны `score` каждого найденного чанка (rerank-score на финальном этапе).
+- [x] `python main.py build-index` собирает индекс без ошибок; интерактивный режим отвечает без падений на 5 smoke-вопросах (`sqli`, `403`, `vacation policy details`, `политика отпусков`, `How is RBAC implemented?`).
+- [x] Контракт MCP-инструментов не изменён (`src/mcp/server.py` не редактировался; smoke `list_documents` возвращает все 3 файла).
+- [x] Обновлены: `_docs/rag-pipeline.md`, `_docs/architecture.md`, `_docs/configuration.md`, `_docs/current-state.md`, `_docs/roadmap.md` (закрытые пункты Phase 4).
+- [x] `README.md` (корень) и `src/README.md` переведены на русский и отражают новый pipeline.
+- [x] Все задачи спринта — в статусе `Done`, сводная таблица актуальна.
 
 ---
 
@@ -516,7 +516,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 ### Задача 3.6. Перевести `README.md` на русский и актуализировать
 
-- **Статус:** Progress
+- **Статус:** Done
 - **Приоритет:** medium
 - **Объём:** M
 - **Зависит от:** Задача 3.5.
@@ -543,10 +543,10 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 #### Definition of Done
 
-- [ ] Оба файла переведены на русский, английские термины индустрии оставлены как есть.
-- [ ] В обоих файлах упомянуты hybrid search, reranker, query expansion.
-- [ ] Указанная модель Ollama в `src/README.md` совпадает с `src/config.py::OLLAMA_MODEL`.
-- [ ] Smoke-test: README читается без внутренних противоречий, разметка корректна (заголовки, code-блоки).
+- [x] Оба файла переведены на русский, английские термины индустрии оставлены как есть (RAG, MCP, FAISS, BM25, RRF, FastMCP, Ollama, qwen3, all-MiniLM-L6-v2, BAAI/bge-reranker-base).
+- [x] В обоих файлах упомянуты hybrid search, reranker, query expansion.
+- [x] Указанная модель Ollama в `src/README.md` (`qwen3:0.6b`) совпадает с `src/config.py::OLLAMA_MODEL`.
+- [x] Smoke-test: в обоих README code-блоки парные, заголовки в порядке, внутренних противоречий нет.
 
 ---
 
@@ -573,10 +573,11 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 | 3.3   | Query Expansion (LLM rewrite)                                                                                              | medium    | M     | Done   | 3.2        |
 | 3.4   | Переключить `CompanyKBAssistant` на новый фасад                                                                            | high      | S     | Done   | 3.3        |
 | 3.5   | Обновить документацию в `_docs/`                                                                                           | medium    | M     | Done   | 3.4        |
-| 3.6   | Перевести `README.md` и `src/README.md` на русский и актуализировать (возможно потребуется актуализировать и другие файлы) | medium    | M     | Progress | 3.5      |
+| 3.6   | Перевести `README.md` и `src/README.md` на русский и актуализировать (возможно потребуется актуализировать и другие файлы) | medium    | M     | Done   | 3.5        |
 
 > Таблицу обновлять синхронно с заголовками задач выше.
 
 ## 9. История изменений спринта
 
 - **2026-04-25** — спринт открыт, ТЗ зафиксировано, задачи 1.1–3.6 в `ToDo`.
+- **2026-04-26** — спринт закрыт. Все 10 задач в `Done`, Acceptance Criteria выполнены. Реализован Advanced Pipeline (`rag/search_engine.py`): query expansion → hybrid BM25+Vector с RRF → cross-encoder rerank. Контракт `CompanyKBAssistant.query` и MCP-инструментов сохранён. Документация в `_docs/` и READMEs обновлены, корневой и `src/README.md` переведены на русский.
