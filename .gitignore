@@ -240,5 +240,5 @@ $RECYCLE.BIN/
 llm/
 python-rag/
 
-/**.md
-/**.txt
+#/**.md
+#/**.txt
