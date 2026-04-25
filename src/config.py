@@ -20,3 +20,9 @@ OLLAMA_MODEL = "qwen3:0.6b"
 
 # RAG retrieval configuration
 TOP_K = 5
+
+# Advanced search pipeline (sprint 01)
+# Hybrid search: BM25 + Vector merged via Reciprocal Rank Fusion (RRF).
+HYBRID_ENABLED = True
+TOP_K_HYBRID = 20         # candidates kept after hybrid merge (input to reranker)
+RRF_K = 60                # canonical Cormack & Clarke (2009) constant

@@ -293,11 +293,33 @@ python main.py build-index
 python -m rag.build_index
 ```
 
-## 9. Что НЕ реализовано (кандидаты в roadmap)
+## 9. Advanced Pipeline (in progress, спринт 01)
+
+В спринте 01 поверх семантического retrieve строится «Advanced Pipeline». На текущий момент закрыты:
+
+- **Hybrid Search (BM25 + Vector + RRF)** — реализован в `src/rag/search_engine.py::hybrid_retrieve`. BM25-индекс `rank_bm25.BM25Okapi` строится лениво в RAM поверх кэшированных `chunks` (без записи на диск, токенизация — `text.lower().split()`). Параллельно делается векторный поиск на `top_n = TOP_K_HYBRID` (по умолчанию 20). Два ранжирования сливаются через **Reciprocal Rank Fusion**:
+  ```
+  RRF(c) = Σ 1 / (RRF_K + rank_r(c))    для r in {vector, bm25}
+  ```
+  Возвращаются top-`top_n` чанков с полем `score = RRF`. Ценность видна на коротких/точных запросах (`403`, `sqli`, `RBAC`): BM25 вытягивает чанк с точным совпадением даже там, где эмбеддинги «размазывают» сигнал. Параметры — в `src/config.py`: `HYBRID_ENABLED`, `TOP_K_HYBRID`, `RRF_K`.
+
+Целевой поток одного запроса (после закрытия задач 3.2–3.4 спринта 01):
+
+```
+user_query
+  ↓ maybe_expand_query   (опц., короткие/аббревиатурные запросы)
+  ↓ hybrid_retrieve(query, TOP_K_HYBRID)         ← BM25 + Vector + RRF
+  ↓ rerank(query, candidates, TOP_K)             ← cross-encoder
+contexts (Top-K) → build_prompt → ask_llm → answer
+```
+
+`src/rag/query.py::retrieve` остаётся низкоуровневым семантическим retrieve и используется `search_engine` изнутри, чтобы не сломать `python -m rag.query`.
+
+## 10. Что НЕ реализовано (кандидаты в roadmap)
 
 - **Инкрементальная индексация**: при изменении одного документа сейчас пересобирается весь индекс.
 - **Версионирование индекса**: артефакты перезаписываются. Невозможно «откатиться» к предыдущему индексу.
 - **Хранение исходного хеша документов**: нельзя автоматически детектировать, какие документы поменялись.
-- **Reranker**: после top-K извлечения нет cross-encoder реранкинга.
+- **Reranker**: после top-K извлечения пока нет cross-encoder реранкинга (закроется задачей 01.3.2).
+- **Query expansion**: LLM-переформулировка коротких запросов (закроется задачей 01.3.3).
 - **Метаданные-фильтры**: нельзя сказать «искать только в `policies/`».
-- **Hybrid search** (FAISS + BM25): только семантический поиск.
