@@ -448,7 +448,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 ### Задача 3.4. Переключить `CompanyKBAssistant` на новый фасад
 
-- **Статус:** Progress
+- **Статус:** Done
 - **Приоритет:** high
 - **Объём:** S
 - **Зависит от:** Задача 3.3.
@@ -468,10 +468,10 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 #### Definition of Done
 
-- [ ] `assistant.py` импортирует `search` из `rag.search_engine`, `retrieve` напрямую больше не используется.
-- [ ] Smoke-тест: 5 вопросов в интерактивном режиме (`python main.py`), у всех — непустой ответ, источники, MCP-решения принимаются как раньше.
-- [ ] Smoke-тест MCP: 1 вопрос «list all documents» — корректно вызывает MCP-инструмент.
-- [ ] Контракт возврата `query` не изменён (поля те же).
+- [x] `assistant.py` импортирует `search` из `rag.search_engine`, `retrieve` напрямую больше не используется.
+- [x] Smoke-тест: 5 вопросов в интерактивном режиме (`python main.py`), у всех — непустой ответ, источники, MCP-решения принимаются как раньше.
+- [x] Smoke-тест MCP: запрос про список документов — корректно вызывает MCP-инструмент `list_documents`, возвращает все 3 файла.
+- [x] Контракт возврата `query` не изменён: `keys = ['answer', 'mcp_tool', 'mcp_used', 'sources']`.
 
 ---
 
@@ -572,7 +572,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 | 3.1   | Hybrid Search (BM25 + Vector + RRF)                                                                                        | high      | M     | Done   | 2.1        |
 | 3.2   | Reranker (cross-encoder)                                                                                                   | high      | M     | Done   | 3.1        |
 | 3.3   | Query Expansion (LLM rewrite)                                                                                              | medium    | M     | Done   | 3.2        |
-| 3.4   | Переключить `CompanyKBAssistant` на новый фасад                                                                            | high      | S     | Progress | 3.3      |
+| 3.4   | Переключить `CompanyKBAssistant` на новый фасад                                                                            | high      | S     | Done   | 3.3        |
 | 3.5   | Обновить документацию в `_docs/`                                                                                           | medium    | M     | ToDo   | 3.4        |
 | 3.6   | Перевести `README.md` и `src/README.md` на русский и актуализировать (возможно потребуется актуализировать и другие файлы) | medium    | M     | ToDo   | 3.5        |
 
