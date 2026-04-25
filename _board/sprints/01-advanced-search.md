@@ -95,7 +95,7 @@
 
 ### Задача 1.2. Impact Analysis текущего поиска (As-Is)
 
-- **Статус:** Progress
+- **Статус:** Done
 - **Приоритет:** high
 - **Объём:** S
 - **Зависит от:** Задача 1.1.
@@ -122,9 +122,9 @@
 
 #### Definition of Done
 
-- [ ] В `_docs/rag-pipeline.md` § 6 есть подсекция «As-Is pipeline» с приведённой схемой.
-- [ ] Есть ссылка на `_board/sprints/01-advanced-search.md` § 5.4 как «целевой pipeline».
-- [ ] Smoke-test не требуется — это документация.
+- [x] В `_docs/rag-pipeline.md` § 6 есть подсекция «As-Is pipeline» с приведённой схемой.
+- [x] Есть ссылка на `_board/sprints/01-advanced-search.md` § 5.4 как «целевой pipeline».
+- [x] Smoke-test не требуется — это документация.
 
 ---
 
@@ -566,7 +566,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 | #     | Задача                                                                                                                     | Приоритет | Объём | Статус | Зависит от |
 |-------|----------------------------------------------------------------------------------------------------------------------------|:---------:|:-----:|:------:|:----------:|
 | 1.1   | Зафиксировать рабочую ветку и записать старт спринта                                                                       | high      | XS    | Done   | —          |
-| 1.2   | Impact Analysis текущего поиска (As-Is)                                                                                    | high      | S     | Progress | 1.1      |
+| 1.2   | Impact Analysis текущего поиска (As-Is)                                                                                    | high      | S     | Done   | 1.1        |
 | 1.3   | Логирование score в `retrieve`                                                                                             | high      | S     | ToDo   | 1.2        |
 | 2.1   | Утвердить спецификацию Advanced Pipeline                                                                                   | high      | XS    | ToDo   | 1.3        |
 | 3.1   | Hybrid Search (BM25 + Vector + RRF)                                                                                        | high      | M     | ToDo   | 2.1        |
