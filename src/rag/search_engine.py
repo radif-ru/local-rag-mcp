@@ -1,0 +1,435 @@
+"""Advanced search pipeline (sprint 01).
+
+This module is the new retrieval facade. It composes three stages on top of
+the existing FAISS / sentence-transformers stack from :mod:`rag.query`:
+
+1. :func:`hybrid_retrieve` — runs BM25 in parallel with the vector index and
+   merges the two ranked lists with Reciprocal Rank Fusion (RRF).
+2. (later in this sprint) :func:`rerank` — cross-encoder rerank of the top-N
+   hybrid candidates.
+3. (later in this sprint) :func:`maybe_expand_query` + :func:`search` —
+   query expansion via Ollama and the public facade used by the assistant.
+
+Only :func:`hybrid_retrieve` is implemented in task 01.3.1; the rest of the
+functions are added in 01.3.2 / 01.3.3 / 01.3.4.
+
+Design notes
+------------
+
+* The BM25 index lives in process memory next to the FAISS index. It is
+  rebuilt lazily on first use from the cached ``chunks`` list (which is
+  already loaded by :mod:`rag.query`). For the corpus sizes the project
+  targets (≤ 10k chunks) this takes well below 100 ms, so we deliberately
+  do **not** persist BM25 to disk — the source of truth stays in
+  ``chunks.pkl``.
+* Tokenisation for BM25 is intentionally minimal in this first version
+  (``text.lower().split()``). Stemming / language-aware tokenisation is
+  out of scope for this sprint (see ``_docs/current-state.md`` § 2.2).
+* The cached ``chunks`` from :mod:`rag.query` are **never mutated**. Every
+  function in this module returns fresh ``dict`` instances with an
+  additional ``score`` field.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from typing import List, Optional
+
+import faiss
+from rank_bm25 import BM25Okapi
+
+# Make ``config`` importable when this module is loaded as ``rag.search_engine``
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from config import (  # noqa: E402
+    OLLAMA_MODEL,
+    QUERY_EXPANSION_ENABLED,
+    QUERY_EXPANSION_MIN_TOKENS,
+    RERANK_ENABLED,
+    RERANKER_MODEL,
+    RRF_K,
+    TOP_K,
+    TOP_K_HYBRID,
+)
+from rag import query as _query  # noqa: E402  (reuse FAISS index + embedder)
+
+
+# ---------------------------------------------------------------------------
+# BM25 lazy index
+# ---------------------------------------------------------------------------
+
+_bm25: Optional[BM25Okapi] = None
+_bm25_chunk_count: int = 0
+
+
+def _tokenize(text: str) -> List[str]:
+    """Minimal whitespace tokenizer used for BM25.
+
+    Lower-cases the text and splits on whitespace. Punctuation is left
+    attached to the token; it does not hurt BM25 ranking because the same
+    tokenizer is applied to both the query and the documents.
+    """
+    return text.lower().split()
+
+
+def _ensure_bm25() -> Optional[BM25Okapi]:
+    """Lazily build the BM25 index over the cached chunks.
+
+    Returns ``None`` if the chunk cache is empty (no documents indexed yet).
+    Rebuilds the index when the chunk cache size has changed (e.g. after
+    ``build-index`` was re-run inside the same process).
+    """
+    global _bm25, _bm25_chunk_count
+
+    chunks = _query.chunks
+    if not chunks:
+        # FAISS index missing — let the caller fall back to vector retrieval,
+        # which itself returns ``[]`` in this state.
+        _bm25 = None
+        _bm25_chunk_count = 0
+        return None
+
+    if _bm25 is None or _bm25_chunk_count != len(chunks):
+        tokenized = [_tokenize(c["text"]) for c in chunks]
+        _bm25 = BM25Okapi(tokenized)
+        _bm25_chunk_count = len(chunks)
+
+    return _bm25
+
+
+# ---------------------------------------------------------------------------
+# Vector retrieval helper (top-N, not the global TOP_K)
+# ---------------------------------------------------------------------------
+
+
+def _vector_topn(query: str, top_n: int) -> List[int]:
+    """Return the indices of the top-``top_n`` chunks ranked by FAISS.
+
+    This mirrors :func:`rag.query.retrieve` but uses ``top_n`` instead of the
+    global ``TOP_K`` and returns indices into the cached ``chunks`` list, so
+    the caller can attach scores from a different ranker (BM25 / RRF).
+    """
+    if _query.index is None or len(_query.chunks) == 0:
+        if not _query._ensure_index_exists():
+            return []
+
+    if _query.index is None or len(_query.chunks) == 0:
+        return []
+
+    q_emb = _query.model.encode([query])
+    faiss.normalize_L2(q_emb)
+    _, ids = _query.index.search(q_emb, top_n)
+    return [int(i) for i in ids[0] if i >= 0]
+
+
+# ---------------------------------------------------------------------------
+# Reciprocal Rank Fusion
+# ---------------------------------------------------------------------------
+
+
+def _rrf_merge(
+    ranked_lists: List[List[int]],
+    *,
+    k: int = RRF_K,
+) -> List[tuple[int, float]]:
+    """Merge several ranked lists of chunk indices via RRF.
+
+    For every list ``L`` and every chunk ``c`` at 1-based rank ``r`` in
+    ``L``, contribute ``1 / (k + r)`` to ``c``'s RRF score. Chunks missing
+    from a list do not contribute from it (their term is implicitly zero).
+
+    Returns a list of ``(chunk_index, rrf_score)`` pairs sorted by score
+    descending.
+    """
+    scores: dict[int, float] = {}
+    for ranked in ranked_lists:
+        for rank, idx in enumerate(ranked, start=1):
+            scores[idx] = scores.get(idx, 0.0) + 1.0 / (k + rank)
+    return sorted(scores.items(), key=lambda pair: pair[1], reverse=True)
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def hybrid_retrieve(query: str, top_n: int = TOP_K_HYBRID) -> List[dict]:
+    """Return the top-``top_n`` chunks ranked by RRF(vector + BM25).
+
+    Each returned dict has the same shape as the cached chunks
+    (``text``, ``source``, ``chunk_id``) plus a ``score`` field whose value
+    is the RRF score (higher is better). The cached ``chunks`` are not
+    mutated — fresh dicts are produced via ``{**chunk, "score": ...}``.
+
+    On an empty index the function returns ``[]`` so that the rest of the
+    pipeline can degrade gracefully.
+    """
+    chunks = _query.chunks
+    if not chunks:
+        if not _query._ensure_index_exists():
+            return []
+        chunks = _query.chunks
+        if not chunks:
+            return []
+
+    vector_ids = _vector_topn(query, top_n)
+
+    bm25 = _ensure_bm25()
+    if bm25 is None:
+        bm25_ids: List[int] = []
+    else:
+        bm25_scores = bm25.get_scores(_tokenize(query))
+        # Sort indices by BM25 score descending, keep top_n.
+        bm25_ids = sorted(
+            range(len(chunks)),
+            key=lambda i: bm25_scores[i],
+            reverse=True,
+        )[:top_n]
+
+    merged = _rrf_merge([vector_ids, bm25_ids])[:top_n]
+    return [
+        {**chunks[idx], "score": float(rrf_score)}
+        for idx, rrf_score in merged
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Cross-encoder reranker
+# ---------------------------------------------------------------------------
+
+_reranker = None  # lazy-initialised CrossEncoder instance
+
+
+def _ensure_reranker():
+    """Lazily load the cross-encoder model.
+
+    The first call downloads ``RERANKER_MODEL`` from HuggingFace if not cached.
+    Returns ``None`` if the model cannot be loaded — callers must fall back
+    to the unreranked candidates.
+    """
+    global _reranker
+    if _reranker is not None:
+        return _reranker
+    try:
+        from sentence_transformers import CrossEncoder
+
+        _reranker = CrossEncoder(RERANKER_MODEL)
+    except Exception as exc:  # pragma: no cover — best-effort fallback
+        print(f"⚠️  Reranker unavailable ({exc}); falling back to hybrid order.")
+        _reranker = None
+    return _reranker
+
+
+def rerank(query: str, candidates: List[dict], top_k: int = TOP_K) -> List[dict]:
+    """Re-rank ``candidates`` with a cross-encoder, return top-``top_k``.
+
+    The returned dicts replace ``score`` with the cross-encoder logit
+    (higher = more relevant). If the reranker is disabled or fails to load,
+    the function silently falls back to the first ``top_k`` candidates as
+    they came in (already RRF-ordered by ``hybrid_retrieve``).
+    """
+    if not candidates:
+        return []
+    if not RERANK_ENABLED:
+        return candidates[:top_k]
+
+    model = _ensure_reranker()
+    if model is None:
+        return candidates[:top_k]
+
+    pairs = [(query, c["text"]) for c in candidates]
+    scores = model.predict(pairs)
+    ranked = sorted(zip(candidates, scores), key=lambda p: p[1], reverse=True)
+    return [
+        {**c, "score": float(s)}
+        for c, s in ranked[:top_k]
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Query expansion (LLM rewrite for short / abbreviation-heavy queries)
+# ---------------------------------------------------------------------------
+
+_QUERY_EXPANSION_SYSTEM_PROMPT = (
+    "You expand short or abbreviated search queries into a longer, "
+    "topic-focused natural-language query. Return ONLY the expanded "
+    "query, without any preface or quotes."
+)
+
+
+def _looks_like_abbreviation(token: str) -> bool:
+    """Heuristic: is ``token`` an obvious acronym / numeric code?
+
+    Used as the secondary trigger for query expansion on multi-token
+    queries (the primary trigger is short query length). Lowercase tokens
+    are intentionally **not** treated as abbreviations here, otherwise
+    common stop-words like ``is`` / ``to`` / ``the`` falsely fire on
+    long natural queries.
+    """
+    if not token:
+        return False
+    stripped = token.strip(",.;:?!()[]{}\"'`")
+    if not stripped:
+        return False
+    if 2 <= len(stripped) <= 6 and stripped.isupper():
+        return True  # XSS, RBAC, JWT, OWASP
+    if 2 <= len(stripped) <= 4 and stripped.isdigit():
+        return True  # 401, 403, 404
+    return False
+
+
+def _should_expand(query: str) -> bool:
+    tokens = query.split()
+    if not tokens:
+        return False
+    if len(tokens) <= QUERY_EXPANSION_MIN_TOKENS:
+        return True
+    return any(_looks_like_abbreviation(tok) for tok in tokens)
+
+
+# Prefixes the LLM sometimes adds even though the system prompt forbids them.
+_EXPANSION_PREFIXES = (
+    "expand the query",
+    "expanded query",
+    "here is the expanded query",
+    "the expanded query is",
+    "expanded:",
+    "query:",
+)
+
+
+def _clean_expansion(text: str) -> str:
+    """Strip ``<think>`` blocks, code fences and chatty prefixes from the
+    LLM's expansion."""
+    import re
+
+    # Remove Qwen3-style thinking blocks.
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = text.replace("/think", " ").replace("/no_think", " ")
+
+    # Strip a single fenced code block, if present.
+    if text.strip().startswith("```"):
+        body = text.strip().split("```", 2)
+        if len(body) >= 2:
+            text = body[1]
+            if text.lower().startswith("text"):
+                text = text[4:]
+
+    # Use only the first non-empty line — the prompt asks for one query.
+    for line in text.splitlines():
+        candidate = line.strip().strip("`").strip("\"'").strip()
+        if candidate:
+            text = candidate
+            break
+    else:
+        return ""
+
+    # Drop chatty prefixes the LLM occasionally prepends.
+    lower = text.lower()
+    for prefix in _EXPANSION_PREFIXES:
+        if lower.startswith(prefix):
+            text = text[len(prefix):].lstrip(" :-—\"'")
+            break
+
+    return text.strip()
+
+
+def maybe_expand_query(query: str) -> tuple[str, Optional[str]]:
+    """Expand short / abbreviated queries via the local LLM.
+
+    Returns ``(original, expanded_or_None)``. ``expanded`` is ``None`` when
+    the activation heuristic does not fire, when expansion is disabled via
+    ``QUERY_EXPANSION_ENABLED``, or when the LLM call fails — in all of
+    these cases the caller falls back to the original query alone.
+    """
+    if not QUERY_EXPANSION_ENABLED:
+        return query, None
+    if not _should_expand(query):
+        return query, None
+
+    try:
+        import ollama
+
+        client = ollama.Client()
+        response = client.chat(
+            model=OLLAMA_MODEL,
+            messages=[
+                {"role": "system", "content": _QUERY_EXPANSION_SYSTEM_PROMPT},
+                # Qwen3 with thinking enabled hides its answer in <think>...</think>
+                # blocks; ``/no_think`` switches the model into direct mode.
+                {"role": "user", "content": f"{query}\n\n/no_think"},
+            ],
+            options={"temperature": 0.1, "num_predict": 200},
+        )
+        raw = response["message"]["content"]
+    except Exception:
+        return query, None
+
+    text = _clean_expansion(raw)
+    if not text or text == query:
+        return query, None
+    return query, text
+
+
+# ---------------------------------------------------------------------------
+# Public facade
+# ---------------------------------------------------------------------------
+
+
+def search(query: str, top_k: int = TOP_K, *, verbose: bool = False) -> List[dict]:
+    """Run the advanced search pipeline and return top-``top_k`` chunks.
+
+    Stages:
+
+    1. :func:`maybe_expand_query` — optional LLM rewrite of short or
+       abbreviation-heavy queries.
+    2. :func:`hybrid_retrieve` — BM25 + Vector + RRF on the original
+       query, plus a second pass on the expanded query when available.
+       The two ranked lists are merged with another RRF pass.
+    3. :func:`rerank` — cross-encoder rerank of the merged candidates
+       (skipped when ``RERANK_ENABLED`` is ``False``).
+
+    Each returned dict carries ``text``, ``source``, ``chunk_id`` and a
+    ``score`` field whose meaning depends on the last stage that ran
+    (rerank logit if the reranker was used, RRF score otherwise).
+    """
+    original, expanded = maybe_expand_query(query)
+    if verbose and expanded:
+        print(f"🪄 expanded → \"{expanded}\"")
+
+    primary = hybrid_retrieve(original, TOP_K_HYBRID)
+    if expanded:
+        secondary = hybrid_retrieve(expanded, TOP_K_HYBRID)
+        # Index by (source, chunk_id) so we can re-merge the two ranked
+        # lists by chunk identity rather than by Python object identity.
+        keyed = {
+            (c.get("source"), c.get("chunk_id")): c
+            for c in (*primary, *secondary)
+        }
+        primary_keys = [(c.get("source"), c.get("chunk_id")) for c in primary]
+        secondary_keys = [(c.get("source"), c.get("chunk_id")) for c in secondary]
+        merged = _rrf_merge_keys([primary_keys, secondary_keys])[:TOP_K_HYBRID]
+        candidates = [
+            {**keyed[key], "score": float(rrf_score)}
+            for key, rrf_score in merged
+        ]
+    else:
+        candidates = primary
+
+    if not RERANK_ENABLED:
+        return candidates[:top_k]
+    return rerank(original, candidates, top_k)
+
+
+def _rrf_merge_keys(
+    ranked_lists: List[List[tuple]],
+    *,
+    k: int = RRF_K,
+) -> List[tuple[tuple, float]]:
+    """Generic RRF merge keyed by an arbitrary hashable identity."""
+    scores: dict[tuple, float] = {}
+    for ranked in ranked_lists:
+        for rank, key in enumerate(ranked, start=1):
+            scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank)
+    return sorted(scores.items(), key=lambda pair: pair[1], reverse=True)

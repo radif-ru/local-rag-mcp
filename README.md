@@ -1,32 +1,32 @@
 # Local RAG/MCP Knowledge Base Assistant
 
-# 📋 The Problem
+# 📋 Проблема
 
-- **Growing Documentation**: Knowledge scattered across files
-- **Information Retrieval**: Hard to find answers without keywords
-- **Privacy Concerns**: Cloud solutions may not comply with policies
+- **Растущая документация**: знания разбросаны по файлам
+- **Поиск информации**: сложно найти ответ без точных ключевых слов
+- **Приватность**: облачные решения могут не соответствовать политикам компании
 
 ```
-Users → Search → Answer = 😫
+Пользователь → Поиск → Ответ = 😫
 ```
 
-# ✨ The Solution
+# ✨ Решение
 
-A **local, intelligent Q&A system** using:
+**Локальный интеллектуальный Q&A-ассистент** на базе:
 
-- **RAG**: Semantic search over documentation
-- **MCP**: Dynamic document access
-- **Local LLM**: Privacy-preserving answers (Ollama)
+- **RAG**: advanced retrieval (BM25 + Vector + RRF, cross-encoder reranker, query expansion)
+- **MCP**: инструменты для динамического доступа к документам
+- **Локальная LLM** (Ollama): ответы без утечки данных
 
-# ✨ Key Benefits
+# ✨ Ключевые преимущества
 
-- ✅ Privacy-first (runs locally)
-- ✅ No API costs
-- ✅ Fast semantic search
-- ✅ Intelligent document access
-- ✅ Complete data control
+- ✅ Privacy-first (всё работает локально)
+- ✅ Нет расходов на API
+- ✅ Быстрый семантический поиск + reranker для точности
+- ✅ Интеллектуальный доступ к документам через MCP
+- ✅ Полный контроль над данными
 
-# 🏗️ Architecture - Top Level
+# 🏗️ Архитектура — верхний уровень
 
 ```
 ┌──────────────────────┐
@@ -36,48 +36,58 @@ A **local, intelligent Q&A system** using:
      ┌─────┴─────┐
      ▼           ▼
   [RAG]       [MCP]
-   Query      Tools
+  search()     Tools
      │           │
      └─────┬─────┘
            ▼
     [Ollama LLM]
 ```
 
-# 🏗️ Architecture - Storage
+# 🏗️ Архитектура — хранилище
 
 ```
 ┌────────────────┐
-│  FAISS Index   │ Vector Database
-│  + MCP Tools   │
+│  FAISS Index   │ векторы (cosine via IndexFlatIP)
+│  + BM25 (RAM)  │ ленивый BM25Okapi поверх чанков
+│  + MCP Tools   │ read / list / search документы
 └────────┬───────┘
          │
     ┌────▼─────┐
-    │   docs/  │
-    │directory │
+    │   docs/  │  исходные файлы
+    │ directory│  (md / txt / pdf / docx)
     └──────────┘
 ```
 
 # 🔍 RAG Pipeline
 
-1. Document Loading → Read .md, .txt, .pdf, .docx
-2. Chunking → Split into 700-char chunks
-3. Embedding → Use SentenceTransformers
-4. Indexing → Build FAISS vector index
-5. Query → Retrieve top 5 similar chunks
-6. Prompt Building → Create context-aware prompt
-7. LLM Generation → Get answer from model
+**Build-time** (раз на корпус):
 
-# 🔍 Why FAISS?
+1. Document Loading → читаем .md, .txt, .pdf, .docx
+2. Chunking → режем на чанки (CHUNK_SIZE токенов cl100k_base, перехлёст CHUNK_OVERLAP)
+3. Embedding → SentenceTransformers (`all-MiniLM-L6-v2`)
+4. Indexing → FAISS `IndexFlatIP` + L2-нормализация → cosine
 
-- Fast vector similarity search
-- Lightweight and memory-efficient
-- No external dependencies
-- Perfect for local deployments
-- Millions of vectors supported
+**Runtime** (на каждый вопрос) — advanced pipeline (спринт 01):
 
-# 🔧 MCP - Model Context Protocol
+5. Query expansion → короткие/аббревиатурные запросы LLM переформулирует
+6. Hybrid retrieve → BM25 + Vector параллельно, слияние через RRF (top_n = TOP_K_HYBRID)
+7. Reranker → cross-encoder `BAAI/bge-reranker-base` оставляет top-`TOP_K`
+8. Prompt Building → собираем context-aware промпт
+9. LLM Generation → ответ от Ollama (`qwen3:0.6b` по умолчанию)
 
-MCP provides **standardized interface** for LLM tool access:
+Детали — `_docs/rag-pipeline.md` § 9 «Advanced Pipeline».
+
+# 🔍 Почему FAISS?
+
+- Быстрый векторный поиск (cosine через inner product на нормализованных векторах)
+- Лёгкий и экономный по памяти
+- Нет внешних зависимостей
+- Идеален для локальных развёртываний
+- Держит миллионы векторов
+
+# 🔧 MCP — Model Context Protocol
+
+MCP даёт **стандартизованный интерфейс** для вызова инструментов из LLM:
 
 ```python
 read_document(file_path)
@@ -85,280 +95,322 @@ list_documents()
 search_documents(query)
 ```
 
-# 🔧 MCP Benefits
+Решение «вызывать ли MCP-инструмент и какой» принимает сама LLM отдельным JSON-решением (`assistant.py::_llm_decide_mcp_usage`).
 
-- Tool Use by LLM
-- Real-time document access
-- Standardized interface
-- Easy to extend
-- Local tool execution
+# 🔧 Преимущества MCP
+
+- LLM сама вызывает инструменты
+- Прямой доступ к документам в момент запроса
+- Стандартизованный протокол (JSON-RPC по stdio)
+- Легко расширяется (декоратор `@mcp.tool`)
+- Инструменты выполняются локально
 
 # 💻 Tech Stack
 
 ```
-Language:      Python 3.10+
-Vector DB:     FAISS
-Embeddings:    SentenceTransformers
-LLM:           Ollama (local)
-MCP:           FastMCP
+Язык:         Python 3.10+
+Vector DB:    FAISS (IndexFlatIP)
+Lexical:      rank_bm25 (BM25Okapi)
+Embeddings:   SentenceTransformers (all-MiniLM-L6-v2)
+Reranker:     CrossEncoder (BAAI/bge-reranker-base)
+LLM:          Ollama (qwen3:0.6b по умолчанию)
+MCP:          FastMCP
 ```
 
-# 📁 Project Structure
+# 📁 Структура проекта
 
 ```
 src/
-├── config.py           Configuration
-├── main.py             CLI entry point
-├── assistant.py        Main orchestrator
+├── config.py            Конфигурация (вкл. advanced-pipeline параметры)
+├── main.py              CLI entry point
+├── assistant.py         Оркестратор (RAG + MCP-decision + Ollama)
 ├── rag/
-│   ├── ingest.py      Load documents
-│   ├── chunk.py       Split text
-│   ├── embed.py       Generate embeddings
-│   ├── build_index.py Build FAISS index
-│   └── query.py       Retrieve & generate
+│   ├── ingest.py        Загрузка документов
+│   ├── chunk.py         Разбиение на чанки
+│   ├── embed.py         Эмбеддинги
+│   ├── build_index.py   Сборка FAISS-индекса
+│   ├── query.py         Низкоуровневый retrieve + build_prompt + ask_llm
+│   └── search_engine.py Фасад search() (спринт 01):
+│                        expand → hybrid (BM25+Vector+RRF) → rerank
 ├── mcp/
-│   ├── server.py      MCP tool definitions
-│   └── client.py      MCP client wrapper
-└── docs/              Documentation
+│   ├── server.py        FastMCP-сервер с read/list/search-инструментами
+│   └── client.py        Обёртка subprocess + JSON-RPC stdio
+└── docs/                Каталог исходных документов (gitignored)
 ```
 
-# 🚀 Index Building (Setup)
+# 🚀 Сборка индекса (Setup)
 
 ```
 $ python main.py build-index
 
-1. Load documents
+1. Загрузка документов из docs/
   ↓
-2. Split into chunks
+2. Разбиение на чанки (cl100k_base, CHUNK_SIZE токенов)
   ↓
-3. Generate embeddings
+3. Эмбеддинги (all-MiniLM-L6-v2)
   ↓
-4. Build FAISS index
+4. FAISS-индекс (IndexFlatIP + L2-norm → cosine)
   ↓
-5. Save files
+5. Сохранение: index.faiss + chunks.pkl
 ```
 
-# 🚀 Query Processing (Runtime)
+# 🚀 Обработка запроса (Runtime, target pipeline)
 
 ```
-User Question
+Вопрос пользователя
   ↓
-Embed question
+maybe_expand_query  — для коротких/аббревиатурных (sqli, 403, RBAC)
+  ↓                    LLM расширяет в развёрнутый запрос
+hybrid_retrieve(query, TOP_K_HYBRID)
+  ↓                    BM25 + Vector параллельно → RRF
+  + (при expanded) повторный hybrid_retrieve и RRF-объединение
   ↓
-Search FAISS → Top 5 chunks
+rerank(query, candidates, TOP_K)
+  ↓                    cross-encoder BAAI/bge-reranker-base
+LLM-decision → MCP-tool?  (да/нет + tool + args)
   ↓
-LLM decides: Use MCP tools?
+build_prompt + context (+ опц. MCP-result)
   ↓
-Build prompt + context
+ask_llm → Ollama (qwen3:0.6b)
   ↓
-Call Ollama
-  ↓
-Return answer + sources
+answer + sources + mcp_used + mcp_tool
 ```
 
-# ✨ Core Features
+# ✨ Ключевые возможности
 
-- **Semantic Search**: Find by meaning, not keywords
-- **Multi-format**: .md, .txt, .pdf, .docx files
-- **Source Attribution**: Shows document sources
-- **MCP Tools**: LLM can read full documents
-- **No External APIs**: Runs locally only
-- **Fast Retrieval**: Sub-second search
+- **Hybrid search**: BM25 + Vector с RRF — вектор для смысла, BM25 для точных совпадений
+- **Cross-encoder reranker**: top-20 кандидатов реранжирует BAAI/bge-reranker-base
+- **Query expansion**: LLM-переформулировка коротких/аббревиатурных запросов
+- **Multi-format**: .md, .txt, .pdf, .docx
+- **Source attribution**: ответ всегда с указанием источников и score
+- **MCP-инструменты**: LLM по необходимости читает документ целиком
+- **Нет внешних API**: всё локально
 
-# ⚙️ Configuration Options
+# ⚙️ Ключевые параметры конфигурации
 
 ```python
+# Базовые
 CHUNK_SIZE = 700
 CHUNK_OVERLAP = 100
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 OLLAMA_MODEL = "qwen3:0.6b"
 TOP_K = 5
+
+# Advanced pipeline (спринт 01)
+HYBRID_ENABLED = True
+TOP_K_HYBRID = 20
+RRF_K = 60
+RERANK_ENABLED = True
+RERANKER_MODEL = "BAAI/bge-reranker-base"
+QUERY_EXPANSION_ENABLED = True
+QUERY_EXPANSION_MIN_TOKENS = 4
 ```
 
-# 🎬 Live Demo - Starting
+Полная таблица и пояснения — `_docs/configuration.md`.
+
+# 🎬 Демо — запуск
 
 ```bash
 $ python main.py
 ```
 
-Output:
+Вывод:
 ```
-🤖 Company Knowledge Base
-Ask questions about documentation
-Type 'exit' to stop
+🤖 Company Knowledge Base Assistant
+Введите вопрос по документации. exit — выход.
 ```
 
-# 🎬 Demo - Query 1
+# 🎬 Демо — короткий запрос (sqli)
 
 ```
-❓ What are company values?
+❓ sqli
+🪄 expanded → "SQL injection prevention guidelines"
+🔍 Retrieved 5 chunks for query: "sqli"
+  1. [score=0.6422] docs/security-policy.md#0
+  ...
 
-🤖 Innovation, integrity, collaboration
-
+🤖 SQL injection (sqli) is mitigated through parameterised queries...
 📚 Sources:
-  • Loan Rangers Team.md
-  • Info Security.md
+  • docs/security-policy.md
 ```
 
-# 🎬 Demo - Query 2
+# 🎬 Демо — MCP list_documents
 
 ```
-❓ What documents do we have?
+❓ list all documents in the docs directory
+🔧 LLM decided to use MCP tool: list_documents with args: {}
+✅ MCP tool returned result
 
-🤖 [Uses MCP list_documents]
-  • Loan Rangers Team.md
-  • Information Security.md
-  • Services.md
+🤖 Доступные документы:
+  • onboarding-ru.md
+  • security-policy.md
+  • vacation-policy.md
 ```
 
-# 🎬 Demo - Query 3
+# 🎬 Демо — MCP read_document
 
 ```
-❓ Full security policy?
+❓ Show me the full vacation policy
+🔧 LLM decided to use MCP tool: read_document with args: {'file_path': 'docs/vacation-policy.md'}
+✅ MCP tool returned result
 
-🤖 [Uses MCP read_document]
-[Full document content...]
+🤖 [Полный текст политики отпусков…]
 ```
 
-# 🔐 Security - Local vs Cloud
+# 🔐 Безопасность — Local vs Cloud
 
-**Cloud**: Data → Internet → Server
-- ⚠️ Network transmission
-- ⚠️ External storage
-- ⚠️ Subscription costs
+**Cloud**: Данные → Интернет → Сервер
+- ⚠️ Сетевая передача
+- ⚠️ Внешнее хранилище
+- ⚠️ Платная подписка
 
-**Local**: Data → Local System
-- ✅ No transmission
-- ✅ Local storage only
-- ✅ No costs
+**Local**: Данные → Локальная система
+- ✅ Нет передачи по сети
+- ✅ Только локальное хранилище
+- ✅ Без платных подписок
 
-# 🔐 Implementation Safeguards
+# 🔐 Гарантии реализации
 
-- **MCP Sandbox**: Prevents path traversal
-- **Local Storage**: Documents stay on device
-- **No Telemetry**: No tracking
-- **Offline Ready**: Works without internet
+- **MCP sandbox**: `read_document` защищён от path traversal (`Path.resolve()` + `startswith`)
+- **Локальное хранение**: документы не покидают машину
+- **Нет телеметрии**: никаких внешних вызовов, кроме Ollama (localhost)
+- **Offline-ready**: работает без интернета после первой загрузки моделей
 
 # ⚡ Performance Benchmarks
 
 ```
-Index Building:   ~30s (one-time)
-Query Embedding:  ~50ms
-FAISS Search:     ~5ms
-LLM Generation:   2-5s
-Total Cycle:      2-6s
+Index Building:    ~30s (one-time, на ~10 МБ документов)
+Query Embedding:   ~50ms
+FAISS Search:      ~5ms
+BM25 Search:       <50ms (для 10k чанков)
+Rerank (top-20):   ~200ms (CPU, BAAI/bge-reranker-base)
+LLM Generation:    2-5s
+Total Cycle:       2-7s (advanced pipeline)
 ```
 
-# ⚡ Tuning for Speed
+# ⚡ Ускорение
 
 ```python
-# Faster (smaller model):
-OLLAMA_MODEL = "qwen3:0.6b"
+# Быстрее (отключить реранкер):
+RERANK_ENABLED = False
 
-# Faster retrieval:
-TOP_K = 3
-CHUNK_SIZE = 500
+# Меньше кандидатов на реранк:
+TOP_K_HYBRID = 10
+
+# Отключить LLM-expansion:
+QUERY_EXPANSION_ENABLED = False
 ```
 
-# 🚢 Deployment - Single Machine
+# 🚢 Развёртывание — одна машина
 
 ```
-1. Install Ollama & Python deps
-2. Copy docs/ to server
-3. Build index
-4. Run with nohup
+1. Установить Ollama и Python-зависимости
+2. ollama pull qwen3:0.6b
+3. Скопировать docs/ на сервер
+4. python main.py build-index
+5. Запустить в фоне:
 
 $ nohup python main.py > log &
 ```
 
-# 🚢 Scaling - Option 1: FastAPI
+# 🚢 Масштабирование — вариант 1: FastAPI
 
 ```
-[HTTP Clients]			[HTTP Clients + Webllm]
-       ↓        						 ↓
-   [FastAPI]     				 [FastAPI]
-       ↓         					 ↓
-[Ollama + FAISS]      			  [FAISS]
+[HTTP клиенты]                  [HTTP + Webllm]
+       ↓                                  ↓
+   [FastAPI]                          [FastAPI]
+       ↓                                  ↓
+[Ollama + FAISS + BM25]              [FAISS + BM25]
 ```
 
-# 🚢 Scaling - Option 2: Distributed
+# 🚢 Масштабирование — вариант 2: распределённо
 
 ```
-[Clients] → [Load Balancer]
-             ↓
-      [Multiple Retrievers]
+[Клиенты] → [Load Balancer]
+              ↓
+     [Несколько Retriever-воркеров]
 ```
 
-# 🚢 Storage Scaling
+# 🚢 Масштаб хранилища
 
 ```
 Docs     Index      Build
-10 MB    ~2 MB      ~5s
-100 MB   ~20 MB     ~30s
-1 GB     ~200 MB    ~5min
+10 MB    ~2 MB      ~30s
+100 MB   ~20 MB     ~5min
+1 GB     ~200 MB    ~30min
 ```
 
-# 🔮 Phase 2: Enhanced Features
+# 🔮 Что уже закрыто (спринт 01)
 
-- ☐ Web UI (Streamlit)
-- ☐ API endpoints
-- ☐ Multi-language support
+- ☑ Hybrid search (BM25 + Vector + RRF)
+- ☑ Cross-encoder reranker (BAAI/bge-reranker-base)
+- ☑ Query expansion (LLM rewrite)
+- ☑ Score каждого чанка в verbose-выводе
+
+# 🔮 Phase 2 — расширенные возможности (в roadmap)
+
+- ☐ Web UI (Streamlit / Vite + React)
+- ☐ HTTP API (FastAPI)
+- ☐ Multi-language embeddings (multilingual-e5)
 - ☐ Document versioning
 - ☐ Fine-tuned embeddings
 
-# 🔮 Phase 3: Advanced
+# 🔮 Phase 3 — advanced (в roadmap)
 
-- ☐ Conversation memory
+- ☐ История диалога (multi-turn)
 - ☐ Multi-hop reasoning
-- ☐ Metadata filtering
+- ☐ Метаданные-фильтры (`policies/` и т.д.)
 - ☐ Feedback loop
 - ☐ Analytics dashboard
 
-# 🔮 Phase 4: Enterprise
+# 🔮 Phase 4 — enterprise (в roadmap)
 
-- ☐ User authentication
+- ☐ Аутентификация пользователей
 - ☐ Audit logging
 - ☐ Role-based access
 - ☐ LLM fine-tuning
 - ☐ Cost analysis
 
-# 📊 Why This Works
+Полный roadmap с приоритетами и рисками — `_docs/roadmap.md`.
 
-| Aspect | Traditional | Our RAG |
-|--------|---|---|
-| **Understanding** | Keywords | Semantic |
-| **Answers** | Documents | Direct |
-| **Privacy** | Cloud | Local |
-| **Cost** | Subscription | One-time |
-| **Speed** | Slow | Sub-second |
+# 📊 Почему это работает
 
-# ✅ What You Have Now
+| Аспект         | Традиционный поиск | Наш RAG (спринт 01)                  |
+|----------------|--------------------|--------------------------------------|
+| **Понимание**  | Ключевые слова     | Semantic + lexical (BM25) + rerank   |
+| **Ответы**     | Документы          | Прямой ответ с источниками           |
+| **Приватность**| Облако             | Локально                             |
+| **Стоимость**  | Подписка           | One-time (оборудование)              |
+| **Скорость**   | Медленно           | 2–7 с (всё локально)                 |
 
-- Local privacy-first knowledge base
-- Fast semantic search (FAISS)
-- Intelligent tool use (MCP)
-- Maintainable Python code
-- Foundation for enterprise features
+# ✅ Что вы получаете
 
-# 🙋 Quick Reference
+- Локальную privacy-first базу знаний
+- Advanced retrieval: hybrid + reranker + query expansion
+- Интеллектуальный вызов MCP-инструментов
+- Поддерживаемый Python-код с фактической документацией (`_docs/`, `_board/`)
+- Основу для дальнейших enterprise-фичей
+
+# 🙋 Быстрый старт
 
 ```bash
-# Build index
+# 1. Собрать индекс
 python main.py build-index
 
-# Run interactively
+# 2. Интерактивный режим
 python main.py
 
-# Check config
-cat config.py
+# 3. Посмотреть конфиг
+cat src/config.py
 ```
 
-# 📚 Resources
+# 📚 Ресурсы
 
-- **Code**: MobilaName/local-rag-mcp
-- **FAISS**: facebook/faiss
+- **Код**: `radif-ru/local-rag-mcp`
+- **Документация проекта**: `_docs/` (русский)
+- **Доска задач / спринты**: `_board/`
+- **FAISS**: github.com/facebookresearch/faiss
+- **rank_bm25**: github.com/dorianbrown/rank_bm25
 - **Ollama**: ollama.ai
 - **FastMCP**: github.com/jlowin/fastmcp
 - **Transformers**: huggingface.co
-
-**Thank You!**

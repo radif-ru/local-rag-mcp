@@ -7,7 +7,8 @@ from rich.markdown import Markdown
 
 # Add current directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
-from rag.query import retrieve, build_prompt, ask_llm
+from rag.query import build_prompt, ask_llm
+from rag.search_engine import search
 from mcp.client import MCPClient
 from config import OLLAMA_MODEL
 
@@ -119,11 +120,19 @@ Your JSON response:"""
     
     def query(self, user_query: str, verbose=False):
         """Answer a question using RAG and optionally MCP tools."""
-        # Step 1: Retrieve from RAG
-        contexts = retrieve(user_query)
+        # Step 1: Retrieve from RAG (advanced pipeline:
+        # query expansion → hybrid BM25+vector with RRF → cross-encoder rerank).
+        contexts = search(user_query, verbose=verbose)
         
         if verbose:
-            print(f"📚 Retrieved {len(contexts)} relevant chunks from knowledge base")
+            print(f"🔍 Retrieved {len(contexts)} chunks for query: \"{user_query}\"")
+            for rank, ctx in enumerate(contexts, 1):
+                score = ctx.get("score")
+                score_str = f"{score:.4f}" if isinstance(score, float) else "n/a"
+                chunk_id = ctx.get("chunk_id")
+                source = ctx.get("source", "?")
+                source_str = f"{source}#{chunk_id}" if chunk_id is not None else source
+                print(f"  {rank}. [score={score_str}] {source_str}")
         
         # Step 2: Ask LLM if MCP tools are needed
         mcp_result = None

@@ -1,112 +1,127 @@
 # Company Knowledge Base Assistant
 
-An intelligent Q&A system that answers questions about company documentation using RAG (Retrieval-Augmented Generation) and MCP (Model Context Protocol) tools.
+Локальный Q&A-ассистент по корпоративной документации на базе RAG (Retrieval-Augmented Generation) и MCP-инструментов (Model Context Protocol).
 
-## Features
+## Возможности
 
-- **RAG-powered search**: Semantic search over company documentation using FAISS
-- **MCP tools**: Dynamic document reading and management
-- **Local LLM**: Privacy-preserving answers using Ollama
+- **Advanced retrieval**: hybrid search (BM25 + Vector с RRF) + cross-encoder reranker + query expansion
+- **MCP-инструменты**: динамическое чтение и поиск документов
+- **Локальная LLM** (Ollama): ответы без утечки данных
 
-## Setup
+## Установка
 
-### 1. Install Dependencies
+### 1. Зависимости
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Set Up Documents
+Пакет `rank_bm25` (для гибридного поиска) и `sentence-transformers` (для cross-encoder реранкера) уже включены в `requirements.txt`.
 
-Create a `docs/` directory and add your company documentation files (`.txt`, `.md`, `.pdf`, `.docx`):
+### 2. Документы
+
+Создайте каталог `docs/` и положите туда файлы документации (`.txt`, `.md`, `.pdf`, `.docx`):
 
 ```bash
 mkdir docs
-# Add your company documentation files here
+# Положить сюда корпоративные документы
 ```
 
-### 3. Configure
+### 3. Конфигурация
 
-Edit `config.py` to set:
-- `DOCUMENTS_DIR`: Path to your documentation directory
-- `OLLAMA_MODEL`: Local LLM model to use (default: "llama3")
-- Other settings as needed
+Отредактируйте `config.py`. Ключевые параметры:
 
-### 4. Build Index (Optional)
+- `DOCUMENTS_DIR` — путь к каталогу документации.
+- `OLLAMA_MODEL` — локальная LLM (по умолчанию `qwen3:0.6b`, должна быть установлена через `ollama pull`).
+- `EMBEDDING_MODEL` — модель эмбеддингов (по умолчанию `all-MiniLM-L6-v2`).
+- Advanced pipeline (спринт 01): `HYBRID_ENABLED`, `TOP_K_HYBRID`, `RRF_K`, `RERANK_ENABLED`, `RERANKER_MODEL`, `QUERY_EXPANSION_ENABLED`, `QUERY_EXPANSION_MIN_TOKENS` — полная таблица в `../_docs/configuration.md`.
 
-The index will be built automatically on first use. To manually build it:
+### 4. Сборка индекса (опционально)
+
+Индекс соберётся автоматически при первом запуске. Вручную:
 
 ```bash
 python main.py build-index
 ```
 
-Or directly:
+Или напрямую:
 
 ```bash
 python -m rag.build_index
 ```
 
-## Usage
+## Использование
 
-### Interactive CLI
-
-Run the interactive assistant:
+### Интерактивный CLI
 
 ```bash
 python main.py
 ```
 
-Then ask questions about your company documentation!
+После запуска можно задавать вопросы по документации. Для коротких/аббревиатурных запросов (`sqli`, `403`, `RBAC`) автоматически срабатывает query expansion, для всех — hybrid retrieve + cross-encoder rerank.
 
-## Project Structure
+## Структура проекта
 
 ```
 src/
-├── config.py              # Configuration
-├── main.py                # CLI entry point
-├── assistant.py           # Main assistant class
-├── rag/                   # RAG components
-│   ├── ingest.py         # Document ingestion
-│   ├── chunk.py          # Text chunking
-│   ├── embed.py          # Embedding generation
-│   ├── build_index.py    # FAISS index building
-│   └── query.py          # Query and retrieval
-├── mcp/                   # MCP components
-│   ├── server.py         # MCP server with tools
-│   └── client.py         # MCP client
-├── requirements.txt      # Dependencies
-└── README.md             # This file
+├── config.py               # Конфигурация (вкл. advanced-pipeline параметры)
+├── main.py                 # CLI entry point
+├── assistant.py            # Оркестратор (CompanyKBAssistant)
+├── rag/                    # RAG-компоненты
+│   ├── ingest.py           # Загрузка документов
+│   ├── chunk.py            # Разбиение на чанки
+│   ├── embed.py            # Эмбеддинги
+│   ├── build_index.py      # Сборка FAISS-индекса
+│   ├── query.py            # Низкоуровневый retrieve + build_prompt + ask_llm
+│   └── search_engine.py    # Фасад search() (спринт 01):
+│                           # expand → hybrid (BM25+Vector+RRF) → rerank
+├── mcp/                    # MCP-компоненты
+│   ├── server.py           # FastMCP-сервер с read/list/search инструментами
+│   └── client.py           # Клиент над subprocess + JSON-RPC stdio
+├── requirements.txt        # Зависимости
+└── README.md               # Этот файл
 ```
 
-## How It Works
+## Как это работает
 
-1. **Document Ingestion**: Loads documents from the `docs/` directory
-2. **Chunking**: Splits documents into smaller chunks with overlap
-3. **Embedding**: Generates embeddings using SentenceTransformers
-4. **Indexing**: Builds FAISS vector index for fast similarity search
-5. **Query**: 
-   - Retrieves relevant chunks using semantic search
-   - Optionally uses MCP tools for document access
-   - Generates answer using local LLM (Ollama)
+**Build-time** (раз на корпус):
+
+1. **Document Ingestion**: загружает документы из `docs/`
+2. **Chunking**: режет на чанки c перехлёстом (`tiktoken cl100k_base`, `CHUNK_SIZE` токенов)
+3. **Embedding**: SentenceTransformers (`all-MiniLM-L6-v2`)
+4. **Indexing**: FAISS `IndexFlatIP` + L2-нормализация → cosine
+
+**Runtime** (на каждый запрос, advanced pipeline спринта 01):
+
+5. **Query expansion** (`maybe_expand_query`): для коротких/аббревиатурных запросов LLM-переформулирует
+6. **Hybrid retrieve** (`hybrid_retrieve`): параллельно FAISS и BM25, слияние через **Reciprocal Rank Fusion**, top-`TOP_K_HYBRID`
+7. **Reranker** (`rerank`): cross-encoder `BAAI/bge-reranker-base` оставляет top-`TOP_K`
+8. **MCP-decision**: LLM решает, нужен ли MCP-инструмент (`assistant.py::_llm_decide_mcp_usage`)
+9. **Prompt + LLM**: `build_prompt` + `ask_llm` (Ollama, `qwen3:0.6b`)
+
+Всё это упаковано в один публичный фасад `rag.search_engine.search(query)`, который вызывает `CompanyKBAssistant.query`.
 
 ## MCP Tools
 
-The MCP server provides:
-- `read_document`: Read a specific document
-- `list_documents`: List all available documents
-- `search_documents`: Search documents by name
+MCP-сервер предоставляет три инструмента (контракт не менялся в спринте 01):
 
-## Troubleshooting
+- `read_document` — прочитать конкретный документ
+- `list_documents` — перечислить доступные документы
+- `search_documents` — найти документ по имени файла
 
-**Index not found**: Run `python main.py build-index` first
+## Решение проблем
 
-**Ollama not responding**: Make sure Ollama is running and the model is installed:
+**Индекс не найден**: выполните `python main.py build-index`.
+
+**Ollama не отвечает**: убедитесь, что Ollama запущена и модель установлена:
 ```bash
-ollama pull llama3
+ollama pull qwen3:0.6b
 ```
 
-**No documents found**: Check that `DOCUMENTS_DIR` in `config.py` points to your documents
+**Документов не найдено**: проверьте, что `DOCUMENTS_DIR` в `config.py` указывает на ваш каталог документов.
 
-## License
+**Реранкер скачивает ~278 МБ при первом запуске**: это нормально, модель `BAAI/bge-reranker-base` кэшируется в `~/.cache/huggingface/`. Чтобы временно отключить — `RERANK_ENABLED = False` в `config.py`.
+
+## Лицензия
 
 MIT

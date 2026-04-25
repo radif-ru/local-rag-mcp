@@ -1,0 +1,119 @@
+Прогресс выполнения задач
+==========================
+
+Файл — для ad-hoc заметок, чек-листов приёмки и временных пометок.
+Не дублировать содержимое plan.md.
+
+Формат записей (свободный):
+
+  [+] выполнено и проверено
+  [~] выполнено частично или требует ручной проверки
+  [-] не выполнено / отложено
+  [!] заблокировано / требует решения
+
+  ----- YYYY-MM-DD <короткое описание сессии или задачи> -----
+
+  Заметки в свободной форме.
+
+
+Текущие записи
+--------------
+
+----- 2026-XX-XX Подготовка структуры _docs и _board -----
+
+Задача 0.1 закрыта. Создано:
+
+  [+] _docs/README.md, project.md, architecture.md, stack.md,
+      project-structure.md, rag-pipeline.md, mcp-tools.md,
+      configuration.md, commands.md, instructions.md,
+      current-state.md, roadmap.md
+  [+] _board/README.md, process.md, plan.md, progress.txt
+
+Документация на русском, технические идентификаторы — латиницей (как в коде).
+В current-state.md зафиксировано 14 известных нюансов и багов, которые могут
+повлиять на следующие задачи. В roadmap.md — 7 фаз развития с кандидатами.
+
+
+----- 2026-04-25 Старт спринта 01: Advanced Search Pipeline -----
+
+Получено ТЗ от пользователя. Структура доски переведена на пофайловую модель
+спринтов: один файл = один спринт, история сохраняется в _board/sprints/.
+
+Создано/обновлено:
+
+  [+] _board/sprints/01-advanced-search.md  (ТЗ + 10 задач: 1.1–3.6, все ToDo)
+  [~] _board/plan.md  (теперь индекс спринтов; задача 0 → 0.1, шаблон обновлён)
+  [~] _board/README.md  (упомянут sprints/, правила под пофайловую модель)
+
+Скоуп спринта 01:
+  - Hybrid Search (BM25 + Vector + RRF)
+  - Reranker (cross-encoder, BAAI/bge-reranker-base)
+  - Query Expansion (LLM rewrite)
+  - Логирование score, обновление _docs/, перевод README на русский
+
+Ветка: feature/advanced-search-pipeline (уже активна).
+Реализация задач из ТЗ начнётся после согласования спецификации (задача 2.1).
+
+
+----- 2026-04-26 Спецификация Advanced Pipeline утверждена (задача 01.2.1) -----
+
+Раздел § 5.1–5.4 спринта 01 принят без правок. Стартовые параметры реализации:
+
+  [+] TOP_K_HYBRID = 20 (вход реранкера)
+  [+] RRF_K = 60 (Cormack & Clarke 2009)
+  [+] HYBRID_ENABLED = True
+  [+] RERANKER_MODEL = "BAAI/bge-reranker-base"
+  [+] RERANK_ENABLED = True
+  [+] QUERY_EXPANSION_ENABLED = True
+  [+] QUERY_EXPANSION_MIN_TOKENS = 4
+
+Эвристика активации query expansion: длина запроса ≤ 4 слов ИЛИ короткий
+аббревиатурный токен (см. § 5.3). Стратегия объединения original+expanded —
+двойной hybrid_retrieve + RRF (а не замена), затем общий rerank.
+
+
+----- Известные нюансы среды для smoke-тестов -----
+
+  [!] src/docs/.gitkeep ломает ingest_documents() (current-state §2.1):
+      из-за else-ветки в rag/ingest.py при наличии в src/docs/ файла без
+      поддерживаемого расширения вылетает TypeError. Workaround на время
+      smoke-тестов: `rm src/docs/.gitkeep`, после теста — `git checkout`.
+      Починка — в Phase 1, не в этом спринте.
+  [!] Локальный смок-корпус (`src/docs/*.md`) НЕ покрыт корневым
+      .gitignore (правило `docs/*.md` действует только в корне репо).
+      На время спринта добавлено в .git/info/exclude.
+
+
+----- 2026-04-26 Спринт 01 закрыт: Advanced Search Pipeline -----
+
+Все 10 задач (1.1–3.6) в Done, Acceptance Criteria выполнены.
+
+Реализовано:
+
+  [+] src/rag/search_engine.py: hybrid_retrieve, rerank, maybe_expand_query, search.
+  [+] hybrid_retrieve: BM25 (rank_bm25, лениво в RAM) + Vector (FAISS) → RRF.
+  [+] rerank: CrossEncoder("BAAI/bge-reranker-base") поверх top-TOP_K_HYBRID.
+  [+] maybe_expand_query: эвристика (≤4 слов или явный акроним/код)
+      + LLM rewrite через Ollama; clean-up <think>...</think> и chatty-prefix.
+  [+] CompanyKBAssistant.query: переключён на search(), контракт сохранён.
+  [+] retrieve(): возвращает чанки с float-полем score.
+  [+] verbose-блок в assistant.py печатает [score=...] для каждого top-K.
+  [+] config: HYBRID_ENABLED, TOP_K_HYBRID=20, RRF_K=60, RERANK_ENABLED,
+      RERANKER_MODEL, QUERY_EXPANSION_ENABLED, QUERY_EXPANSION_MIN_TOKENS=4.
+  [+] requirements: + rank_bm25>=0.2.2.
+  [+] _docs/* и READMEs обновлены, корневой и src/README.md переведены
+      на русский с сохранением английских терминов индустрии.
+
+Smoke-итоги (4 чанка тестового корпуса, qwen3:0.6b):
+
+  [+] sqli                                  → security-policy.md (rerank 0.64)
+  [+] 403                                   → security-policy.md (rerank 0.78)
+  [+] vacation policy details               → vacation-policy.md
+  [+] What is the vacation policy in detail?→ vacation-policy.md (+ MCP read_document)
+  [+] How is RBAC implemented?              → security-policy.md
+  [+] политика отпусков                     → vacation-policy.md
+  [+] list_documents через MCP              → 3/3 файла
+
+MCP-контракт не менялся (src/mcp/* пусто в diff).
+
+Ветка feature/advanced-search-pipeline запушена; готова к merge в main.
