@@ -7,7 +7,8 @@ from rich.markdown import Markdown
 
 # Add current directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
-from rag.query import retrieve, build_prompt, ask_llm
+from rag.query import build_prompt, ask_llm
+from rag.search_engine import search
 from mcp.client import MCPClient
 from config import OLLAMA_MODEL
 
@@ -119,8 +120,9 @@ Your JSON response:"""
     
     def query(self, user_query: str, verbose=False):
         """Answer a question using RAG and optionally MCP tools."""
-        # Step 1: Retrieve from RAG
-        contexts = retrieve(user_query)
+        # Step 1: Retrieve from RAG (advanced pipeline:
+        # query expansion → hybrid BM25+vector with RRF → cross-encoder rerank).
+        contexts = search(user_query, verbose=verbose)
         
         if verbose:
             print(f"🔍 Retrieved {len(contexts)} chunks for query: \"{user_query}\"")
