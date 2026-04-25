@@ -477,7 +477,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 ### Задача 3.5. Обновить документацию в `_docs/`
 
-- **Статус:** ToDo
+- **Статус:** Progress
 - **Приоритет:** medium
 - **Объём:** M
 - **Зависит от:** Задача 3.4.
@@ -573,7 +573,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 | 3.2   | Reranker (cross-encoder)                                                                                                   | high      | M     | Done   | 3.1        |
 | 3.3   | Query Expansion (LLM rewrite)                                                                                              | medium    | M     | Done   | 3.2        |
 | 3.4   | Переключить `CompanyKBAssistant` на новый фасад                                                                            | high      | S     | Done   | 3.3        |
-| 3.5   | Обновить документацию в `_docs/`                                                                                           | medium    | M     | ToDo   | 3.4        |
+| 3.5   | Обновить документацию в `_docs/`                                                                                           | medium    | M     | Progress | 3.4      |
 | 3.6   | Перевести `README.md` и `src/README.md` на русский и актуализировать (возможно потребуется актуализировать и другие файлы) | medium    | M     | ToDo   | 3.5        |
 
 > Таблицу обновлять синхронно с заголовками задач выше.
