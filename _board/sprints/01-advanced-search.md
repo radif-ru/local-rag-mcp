@@ -130,7 +130,7 @@
 
 ### Задача 1.3. Логирование score в `retrieve`
 
-- **Статус:** ToDo
+- **Статус:** Progress
 - **Приоритет:** high
 - **Объём:** S
 - **Зависит от:** Задача 1.2.
@@ -567,7 +567,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 |-------|----------------------------------------------------------------------------------------------------------------------------|:---------:|:-----:|:------:|:----------:|
 | 1.1   | Зафиксировать рабочую ветку и записать старт спринта                                                                       | high      | XS    | Done   | —          |
 | 1.2   | Impact Analysis текущего поиска (As-Is)                                                                                    | high      | S     | Done   | 1.1        |
-| 1.3   | Логирование score в `retrieve`                                                                                             | high      | S     | ToDo   | 1.2        |
+| 1.3   | Логирование score в `retrieve`                                                                                             | high      | S     | Progress | 1.2      |
 | 2.1   | Утвердить спецификацию Advanced Pipeline                                                                                   | high      | XS    | ToDo   | 1.3        |
 | 3.1   | Hybrid Search (BM25 + Vector + RRF)                                                                                        | high      | M     | ToDo   | 2.1        |
 | 3.2   | Reranker (cross-encoder)                                                                                                   | high      | M     | ToDo   | 3.1        |
