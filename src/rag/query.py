@@ -74,7 +74,13 @@ _ensure_index_exists()
 
 
 def retrieve(query: str):
-    """Retrieve relevant chunks for a query."""
+    """Retrieve relevant chunks for a query.
+
+    Returns a list of dicts shaped like the cached chunks (``text``,
+    ``source``, ``chunk_id``) plus a ``score`` field with the cosine
+    similarity from FAISS. The returned dicts are fresh copies — the
+    cached ``chunks`` list is not mutated.
+    """
     # Ensure index exists before retrieving
     if index is None or len(chunks) == 0:
         if not _ensure_index_exists():
@@ -87,7 +93,12 @@ def retrieve(query: str):
     faiss.normalize_L2(q_emb)
 
     scores, ids = index.search(q_emb, TOP_K)
-    return [chunks[i] for i in ids[0]]
+    results = []
+    for rank, idx in enumerate(ids[0]):
+        if idx < 0:
+            continue
+        results.append({**chunks[idx], "score": float(scores[0][rank])})
+    return results
 
 
 def build_prompt(query, contexts):

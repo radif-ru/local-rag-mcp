@@ -123,7 +123,14 @@ Your JSON response:"""
         contexts = retrieve(user_query)
         
         if verbose:
-            print(f"📚 Retrieved {len(contexts)} relevant chunks from knowledge base")
+            print(f"🔍 Retrieved {len(contexts)} chunks for query: \"{user_query}\"")
+            for rank, ctx in enumerate(contexts, 1):
+                score = ctx.get("score")
+                score_str = f"{score:.4f}" if isinstance(score, float) else "n/a"
+                chunk_id = ctx.get("chunk_id")
+                source = ctx.get("source", "?")
+                source_str = f"{source}#{chunk_id}" if chunk_id is not None else source
+                print(f"  {rank}. [score={score_str}] {source_str}")
         
         # Step 2: Ask LLM if MCP tools are needed
         mcp_result = None

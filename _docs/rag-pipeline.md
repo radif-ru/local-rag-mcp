@@ -189,7 +189,21 @@ contexts → build_prompt → ask_llm → answer
 q_emb = model.encode([query])
 faiss.normalize_L2(q_emb)
 scores, ids = index.search(q_emb, TOP_K)   # TOP_K = 5 по умолчанию
-return [chunks[i] for i in ids[0]]
+return [
+    {**chunks[i], "score": float(scores[0][rank])}
+    for rank, i in enumerate(ids[0]) if i >= 0
+]
+```
+
+Возвращает список словарей того же вида, что лежат в `chunks.pkl` (`text`, `source`, `chunk_id`), с дополнительным полем `score: float` — косинусной близостью из FAISS. Кэшированные `chunks` **не мутируются** — каждый возвращаемый dict собирается заново через `{**chunks[i], "score": ...}`.
+
+При `verbose=True` в `CompanyKBAssistant.query` (`src/assistant.py`) печатается блок:
+
+```
+🔍 Retrieved 5 chunks for query: "..."
+  1. [score=0.7821] src/docs/policy.md#3
+  2. [score=0.7104] src/docs/security.md#1
+  ...
 ```
 
 **Защита от пустого индекса**: если `index is None or len(chunks) == 0` — возвращается `[]`. Дальнейший pipeline корректно работает с пустыми контекстами.
