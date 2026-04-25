@@ -153,6 +153,26 @@ pickle.dump(chunks, open(chunks_path, "wb"))
 
 **Файл**: `src/rag/query.py`.
 
+### As-Is pipeline (до спринта 01)
+
+Текущий («As-Is») поток обработки одного поискового запроса от `user_query` до `contexts` — чистый семантический retrieval, единственный источник ранжирования — FAISS (косинусная близость по нормализованным эмбеддингам):
+
+```
+user_query
+  ↓ model.encode([query])
+  ↓ faiss.normalize_L2(q_emb)
+  ↓ index.search(q_emb, TOP_K)        ← единственный источник ранжирования
+  ↓ [chunks[i] for i in ids[0]]
+contexts → build_prompt → ask_llm → answer
+```
+
+Ограничения этого подхода (из-за чего и стартовал спринт 01):
+
+- На коротких запросах и аббревиатурах (`sqli`, `403`, `XSS`) эмбеддинги «размазывают» точные совпадения — нужный чанк может оказаться вне top-K.
+- `scores`, возвращаемые `index.search`, отбрасываются — потребитель не видит, насколько уверенно найден чанк.
+
+Целевой pipeline — см. `_board/sprints/01-advanced-search.md` § 5.4 (hybrid BM25 + vector с RRF, cross-encoder reranker, query expansion).
+
 ### Загрузка индекса (`_ensure_index_exists`)
 
 При импорте модуля выполняется автозагрузка:
