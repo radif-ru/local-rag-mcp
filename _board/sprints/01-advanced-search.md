@@ -379,7 +379,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 ### Задача 3.2. Reranker (cross-encoder)
 
-- **Статус:** Progress
+- **Статус:** Done
 - **Приоритет:** high
 - **Объём:** M
 - **Зависит от:** Задача 3.1.
@@ -403,12 +403,12 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 #### Definition of Done
 
-- [ ] `src/rag/search_engine.py::rerank` и `search` реализованы.
-- [ ] Первый запуск докачивает `BAAI/bge-reranker-base` без ошибок.
-- [ ] `python -c "from rag.search_engine import search; r = search('test'); print(len(r), r[0]['score'])"` отрабатывает.
-- [ ] Smoke-тест на тех же 3 запросах, что в задаче 3.1, — top-`TOP_K` возвращается, `score` теперь rerank-score.
-- [ ] Время на запрос укладывается в +1 сек к baseline (если нет — оставить запись в `_docs/current-state.md`, не блокировать спринт).
-- [ ] MCP-инструменты не затронуты.
+- [x] `src/rag/search_engine.py::rerank` и `search` реализованы.
+- [x] Первый запуск докачивает `BAAI/bge-reranker-base` без ошибок.
+- [x] `python -c "from rag.search_engine import search; r = search('test'); print(len(r), r[0]['score'])"` отрабатывает.
+- [x] Smoke-тест на тех же 3 запросах, что в задаче 3.1, — top-`TOP_K` возвращается, `score` теперь rerank-score.
+- [x] Время на запрос укладывается в +1 сек к baseline (~40 мс на 4 парах, ~200 мс на 20 парах после прогрева).
+- [x] MCP-инструменты не затронуты.
 
 ---
 
@@ -570,7 +570,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 | 1.3   | Логирование score в `retrieve`                                                                                             | high      | S     | Done   | 1.2        |
 | 2.1   | Утвердить спецификацию Advanced Pipeline                                                                                   | high      | XS    | Done   | 1.3        |
 | 3.1   | Hybrid Search (BM25 + Vector + RRF)                                                                                        | high      | M     | Done   | 2.1        |
-| 3.2   | Reranker (cross-encoder)                                                                                                   | high      | M     | Progress | 3.1      |
+| 3.2   | Reranker (cross-encoder)                                                                                                   | high      | M     | Done   | 3.1        |
 | 3.3   | Query Expansion (LLM rewrite)                                                                                              | medium    | M     | ToDo   | 3.2        |
 | 3.4   | Переключить `CompanyKBAssistant` на новый фасад                                                                            | high      | S     | ToDo   | 3.3        |
 | 3.5   | Обновить документацию в `_docs/`                                                                                           | medium    | M     | ToDo   | 3.4        |
