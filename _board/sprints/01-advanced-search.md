@@ -414,7 +414,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 ### Задача 3.3. Query Expansion (LLM rewrite)
 
-- **Статус:** Progress
+- **Статус:** Done
 - **Приоритет:** medium
 - **Объём:** M
 - **Зависит от:** Задача 3.2.
@@ -438,11 +438,11 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 #### Definition of Done
 
-- [ ] `maybe_expand_query` корректно отрабатывает на коротких/аббревиатурных запросах (`sqli`, `403`, `XSS`) и пропускает длинные.
-- [ ] При `verbose=True` в логах видно `expanded → "..."` для коротких запросов.
-- [ ] Smoke-тест: 5 вопросов (2 короткие/аббревиатурные, 3 обычные) — все возвращают непустой ответ.
-- [ ] Откат на оригинал при ошибке Ollama не падает с исключением.
-- [ ] `_docs/architecture.md` § 4 обновлён схемой целевого pipeline.
+- [x] `maybe_expand_query` корректно отрабатывает на коротких/аббревиатурных запросах (`sqli`, `403`, `XSS`, `RBAC`) и пропускает длинные.
+- [x] При `verbose=True` в логах видно `🪄 expanded → "..."` для коротких запросов (когда LLM вернул непустой ответ).
+- [x] Smoke-тест: 5 вопросов (2 короткие/аббревиатурные, 3 обычные) — все возвращают непустой ответ.
+- [x] Откат на оригинал при ошибке/пустом ответе Ollama не падает с исключением (проверено на `403`, где qwen3:0.6b вернула пустое тело).
+- [x] `_docs/architecture.md` § 4 обновлён схемой целевого pipeline.
 
 ---
 
@@ -571,7 +571,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 | 2.1   | Утвердить спецификацию Advanced Pipeline                                                                                   | high      | XS    | Done   | 1.3        |
 | 3.1   | Hybrid Search (BM25 + Vector + RRF)                                                                                        | high      | M     | Done   | 2.1        |
 | 3.2   | Reranker (cross-encoder)                                                                                                   | high      | M     | Done   | 3.1        |
-| 3.3   | Query Expansion (LLM rewrite)                                                                                              | medium    | M     | Progress | 3.2      |
+| 3.3   | Query Expansion (LLM rewrite)                                                                                              | medium    | M     | Done   | 3.2        |
 | 3.4   | Переключить `CompanyKBAssistant` на новый фасад                                                                            | high      | S     | ToDo   | 3.3        |
 | 3.5   | Обновить документацию в `_docs/`                                                                                           | medium    | M     | ToDo   | 3.4        |
 | 3.6   | Перевести `README.md` и `src/README.md` на русский и актуализировать (возможно потребуется актуализировать и другие файлы) | medium    | M     | ToDo   | 3.5        |
