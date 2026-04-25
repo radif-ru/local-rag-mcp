@@ -379,7 +379,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 ### Задача 3.2. Reranker (cross-encoder)
 
-- **Статус:** ToDo
+- **Статус:** Progress
 - **Приоритет:** high
 - **Объём:** M
 - **Зависит от:** Задача 3.1.
@@ -570,7 +570,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 | 1.3   | Логирование score в `retrieve`                                                                                             | high      | S     | Done   | 1.2        |
 | 2.1   | Утвердить спецификацию Advanced Pipeline                                                                                   | high      | XS    | Done   | 1.3        |
 | 3.1   | Hybrid Search (BM25 + Vector + RRF)                                                                                        | high      | M     | Done   | 2.1        |
-| 3.2   | Reranker (cross-encoder)                                                                                                   | high      | M     | ToDo   | 3.1        |
+| 3.2   | Reranker (cross-encoder)                                                                                                   | high      | M     | Progress | 3.1      |
 | 3.3   | Query Expansion (LLM rewrite)                                                                                              | medium    | M     | ToDo   | 3.2        |
 | 3.4   | Переключить `CompanyKBAssistant` на новый фасад                                                                            | high      | S     | ToDo   | 3.3        |
 | 3.5   | Обновить документацию в `_docs/`                                                                                           | medium    | M     | ToDo   | 3.4        |
