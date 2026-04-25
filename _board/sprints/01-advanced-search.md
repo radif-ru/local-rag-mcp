@@ -291,7 +291,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 ### Задача 2.1. Утвердить спецификацию Advanced Pipeline
 
-- **Статус:** Progress
+- **Статус:** Done
 - **Приоритет:** high
 - **Объём:** XS
 - **Зависит от:** Задача 1.3.
@@ -310,8 +310,8 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 #### Definition of Done
 
-- [ ] Раздел § 5 прочитан, либо принят как есть, либо уточнён отдельным коммитом.
-- [ ] Параметры (`TOP_K_HYBRID`, `RRF_K`, `RERANKER_MODEL`, `QUERY_EXPANSION_MIN_TOKENS`) подтверждены — это значения, с которыми стартует реализация.
+- [x] Раздел § 5 прочитан, принят «как есть» (фиксация в `_board/progress.txt` от 2026-04-26).
+- [x] Параметры (`TOP_K_HYBRID=20`, `RRF_K=60`, `RERANKER_MODEL="BAAI/bge-reranker-base"`, `QUERY_EXPANSION_MIN_TOKENS=4`) подтверждены — это значения, с которыми стартует реализация.
 
 ---
 
@@ -568,7 +568,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 | 1.1   | Зафиксировать рабочую ветку и записать старт спринта                                                                       | high      | XS    | Done   | —          |
 | 1.2   | Impact Analysis текущего поиска (As-Is)                                                                                    | high      | S     | Done   | 1.1        |
 | 1.3   | Логирование score в `retrieve`                                                                                             | high      | S     | Done   | 1.2        |
-| 2.1   | Утвердить спецификацию Advanced Pipeline                                                                                   | high      | XS    | Progress | 1.3      |
+| 2.1   | Утвердить спецификацию Advanced Pipeline                                                                                   | high      | XS    | Done   | 1.3        |
 | 3.1   | Hybrid Search (BM25 + Vector + RRF)                                                                                        | high      | M     | ToDo   | 2.1        |
 | 3.2   | Reranker (cross-encoder)                                                                                                   | high      | M     | ToDo   | 3.1        |
 | 3.3   | Query Expansion (LLM rewrite)                                                                                              | medium    | M     | ToDo   | 3.2        |

@@ -53,3 +53,32 @@
 
 Ветка: feature/advanced-search-pipeline (уже активна).
 Реализация задач из ТЗ начнётся после согласования спецификации (задача 2.1).
+
+
+----- 2026-04-26 Спецификация Advanced Pipeline утверждена (задача 01.2.1) -----
+
+Раздел § 5.1–5.4 спринта 01 принят без правок. Стартовые параметры реализации:
+
+  [+] TOP_K_HYBRID = 20 (вход реранкера)
+  [+] RRF_K = 60 (Cormack & Clarke 2009)
+  [+] HYBRID_ENABLED = True
+  [+] RERANKER_MODEL = "BAAI/bge-reranker-base"
+  [+] RERANK_ENABLED = True
+  [+] QUERY_EXPANSION_ENABLED = True
+  [+] QUERY_EXPANSION_MIN_TOKENS = 4
+
+Эвристика активации query expansion: длина запроса ≤ 4 слов ИЛИ короткий
+аббревиатурный токен (см. § 5.3). Стратегия объединения original+expanded —
+двойной hybrid_retrieve + RRF (а не замена), затем общий rerank.
+
+
+----- Известные нюансы среды для smoke-тестов -----
+
+  [!] src/docs/.gitkeep ломает ingest_documents() (current-state §2.1):
+      из-за else-ветки в rag/ingest.py при наличии в src/docs/ файла без
+      поддерживаемого расширения вылетает TypeError. Workaround на время
+      smoke-тестов: `rm src/docs/.gitkeep`, после теста — `git checkout`.
+      Починка — в Phase 1, не в этом спринте.
+  [!] Локальный смок-корпус (`src/docs/*.md`) НЕ покрыт корневым
+      .gitignore (правило `docs/*.md` действует только в корне репо).
+      На время спринта добавлено в .git/info/exclude.
