@@ -6,13 +6,18 @@
 
 - ✅ **Сборка FAISS-индекса** из документов в `DOCUMENTS_DIR`. Поддержка `.md`, `.txt`, `.pdf`, `.docx`. Команда `python main.py build-index`.
 - ✅ **Семантический поиск** — `IndexFlatIP` + L2-нормализованные эмбеддинги (косинусная близость), top-K чанков.
+- ✅ **Гибридный поиск (BM25 + Vector + RRF)** — спринт 01, `rag/search_engine.py::hybrid_retrieve`. BM25 строится лениво в RAM поверх кэшированных чанков; вектор и BM25 сливаются через Reciprocal Rank Fusion (`RRF_K = 60`). Точные совпадения (`403`, `sqli`, `RBAC`) выходят в топ.
+- ✅ **Cross-encoder реранкер** — спринт 01, `rag/search_engine.py::rerank` через `BAAI/bge-reranker-base`. Из top-`TOP_K_HYBRID = 20` кандидатов оставляет top-`TOP_K = 5`. Лениво грузится при первом вызове, ~200 мс на запрос на CPU.
+- ✅ **Query expansion (LLM rewrite)** — спринт 01, `rag/search_engine.py::maybe_expand_query`. Эвристика (≤ 4 слов или явный акроним/код) включает LLM-переформулировку через тот же Ollama-клиент. При сбое — silently fallback на оригинал.
+- ✅ **Фасад `search()`** — спринт 01, `rag/search_engine.py::search`. `CompanyKBAssistant.query` вызывает его вместо старого `retrieve`; контракт `{answer, sources, mcp_used, mcp_tool}` не изменён.
+- ✅ **Score чанков в выводе** — спринт 01, `verbose=True` печатает `[score=...]` для каждого top-K фрагмента (`assistant.py`).
 - ✅ **Интерактивный Q&A** — `python main.py` с многострочным промптом и атрибуцией источников.
 - ✅ **MCP-сервер с тремя инструментами**: `read_document`, `list_documents`, `search_documents`. Stdio-транспорт, JSON-RPC.
 - ✅ **MCP-клиент** в виде subprocess, корректный init и shutdown (`assistant.close()`).
 - ✅ **LLM-decision промпт** — модель сама решает, нужен ли MCP-инструмент, в формате строгого JSON.
 - ✅ **Защита от path traversal** в `read_document` через `Path.resolve()` + `startswith`.
 - ✅ **Авто-сборка индекса при отсутствии** — если `index.faiss`/`chunks.pkl` нет, `_ensure_index_exists` пытается собрать их.
-- ✅ **Корректная обработка пустого индекса** — при отсутствии документов `retrieve()` возвращает `[]`, пайплайн идёт по «пустому» шаблону промпта.
+- ✅ **Корректная обработка пустого индекса** — при отсутствии документов `retrieve()` / `search()` возвращают `[]`, пайплайн идёт по «пустому» шаблону промпта.
 
 ## 2. Известные проблемы (баги, недочёты, легаси)
 

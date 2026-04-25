@@ -96,13 +96,14 @@
 
 Документировано отдельно в [`rag-pipeline.md`](./rag-pipeline.md). Кратко:
 
-| Модуль                | Назначение                                                       |
-|-----------------------|------------------------------------------------------------------|
-| `rag/ingest.py`       | Загрузка документов из `DOCUMENTS_DIR` (форматы: `.md`, `.txt`, `.pdf`, `.docx`). |
-| `rag/chunk.py`        | Токенайзер `tiktoken cl100k_base`, окно `CHUNK_SIZE` с перехлёстом `CHUNK_OVERLAP`. |
-| `rag/embed.py`        | `SentenceTransformer(EMBEDDING_MODEL)`.                          |
-| `rag/build_index.py`  | Сборка FAISS-индекса (`IndexFlatIP` + L2-нормализация) и `chunks.pkl`. |
-| `rag/query.py`        | Загрузка индекса, поиск top-K, построение промпта, обращение к Ollama. |
+| Модуль                  | Назначение                                                                                  |
+|-------------------------|---------------------------------------------------------------------------------------------|
+| `rag/ingest.py`         | Загрузка документов из `DOCUMENTS_DIR` (форматы: `.md`, `.txt`, `.pdf`, `.docx`).            |
+| `rag/chunk.py`          | Токенайзер `tiktoken cl100k_base`, окно `CHUNK_SIZE` с перехлёстом `CHUNK_OVERLAP`.          |
+| `rag/embed.py`          | `SentenceTransformer(EMBEDDING_MODEL)`.                                                     |
+| `rag/build_index.py`    | Сборка FAISS-индекса (`IndexFlatIP` + L2-нормализация) и `chunks.pkl`.                       |
+| `rag/query.py`          | Низкоуровневый семантический retrieve (`retrieve`), построение промпта, обращение к Ollama.  |
+| `rag/search_engine.py`  | Фасад `search` (спринт 01): query expansion → hybrid BM25+vector с RRF → cross-encoder rerank. |
 
 ### 3.4 MCP-слой — `src/mcp/`
 
@@ -113,7 +114,7 @@
 
 ### 3.5 Конфигурация — `src/config.py`
 
-Один модуль с константами уровня проекта. Подробно — в [`configuration.md`](./configuration.md). Параметры включают: каталог документов, размеры чанка/перехлёста, имя эмбеддинг-модели, путь индекса, URL Ollama, имя LLM-модели, `TOP_K`.
+Один модуль с константами уровня проекта. Подробно — в [`configuration.md`](./configuration.md). Параметры включают: каталог документов, размеры чанка/перехлёста, имя эмбеддинг-модели, путь индекса, URL Ollama, имя LLM-модели, `TOP_K`, плюс параметры Advanced Pipeline (спринт 01): `HYBRID_ENABLED`, `TOP_K_HYBRID`, `RRF_K`, `RERANK_ENABLED`, `RERANKER_MODEL`, `QUERY_EXPANSION_ENABLED`, `QUERY_EXPANSION_MIN_TOKENS`.
 
 ## 4. Поток обработки одного запроса
 

@@ -4,17 +4,24 @@
 
 ## 1. Полный перечень параметров
 
-| Параметр              | Значение по умолчанию                          | Тип    | Где используется                            |
-|-----------------------|------------------------------------------------|--------|---------------------------------------------|
-| `DOCUMENTS_DIR`       | `"./docs"`                                     | `str`  | `rag/ingest.py`, `mcp/server.py`            |
-| `CHUNK_SIZE`          | `700`                                          | `int`  | `rag/chunk.py`                              |
-| `CHUNK_OVERLAP`       | `100`                                          | `int`  | `rag/chunk.py`                              |
-| `EMBEDDING_MODEL`     | `"all-MiniLM-L6-v2"`                           | `str`  | `rag/embed.py`, `rag/query.py`              |
-| `FAISS_INDEX_PATH`    | `"index.faiss"`                                | `str`  | `rag/build_index.py`, `rag/query.py`        |
-| `CHUNKS_PATH`         | `"chunks.pkl"`                                 | `str`  | `rag/build_index.py`, `rag/query.py`        |
-| `OLLAMA_URL`          | `"http://localhost:11434/api/generate"`        | `str`  | `rag/query.py::ask_llm`                     |
-| `OLLAMA_MODEL`        | `"qwen3:0.6b"`                                 | `str`  | `rag/query.py`, `assistant.py`              |
-| `TOP_K`               | `5`                                            | `int`  | `rag/query.py::retrieve`                    |
+| Параметр                      | Значение по умолчанию                          | Тип    | Где используется                                     |
+|-------------------------------|------------------------------------------------|--------|------------------------------------------------------|
+| `DOCUMENTS_DIR`               | `"./docs"`                                     | `str`  | `rag/ingest.py`, `mcp/server.py`                     |
+| `CHUNK_SIZE`                  | `700`                                          | `int`  | `rag/chunk.py`                                       |
+| `CHUNK_OVERLAP`               | `100`                                          | `int`  | `rag/chunk.py`                                       |
+| `EMBEDDING_MODEL`             | `"all-MiniLM-L6-v2"`                           | `str`  | `rag/embed.py`, `rag/query.py`                       |
+| `FAISS_INDEX_PATH`            | `"index.faiss"`                                | `str`  | `rag/build_index.py`, `rag/query.py`                 |
+| `CHUNKS_PATH`                 | `"chunks.pkl"`                                 | `str`  | `rag/build_index.py`, `rag/query.py`                 |
+| `OLLAMA_URL`                  | `"http://localhost:11434/api/generate"`        | `str`  | `rag/query.py::ask_llm`                              |
+| `OLLAMA_MODEL`                | `"qwen3:0.6b"`                                 | `str`  | `rag/query.py`, `assistant.py`, `rag/search_engine.py` |
+| `TOP_K`                       | `5`                                            | `int`  | `rag/query.py::retrieve`, `rag/search_engine.py::search` |
+| `HYBRID_ENABLED`              | `True`                                         | `bool` | `rag/search_engine.py` (резервируется под флаг полного отключения hybrid; первая версия всегда строит BM25 рядом с FAISS) |
+| `TOP_K_HYBRID`                | `20`                                           | `int`  | `rag/search_engine.py::hybrid_retrieve` (вход реранкера) |
+| `RRF_K`                       | `60`                                           | `int`  | `rag/search_engine.py` — константа RRF (Cormack & Clarke 2009) |
+| `RERANK_ENABLED`              | `True`                                         | `bool` | `rag/search_engine.py::rerank` / `search`            |
+| `RERANKER_MODEL`              | `"BAAI/bge-reranker-base"`                     | `str`  | `rag/search_engine.py::_ensure_reranker`             |
+| `QUERY_EXPANSION_ENABLED`     | `True`                                         | `bool` | `rag/search_engine.py::maybe_expand_query`           |
+| `QUERY_EXPANSION_MIN_TOKENS`  | `4`                                            | `int`  | `rag/search_engine.py::_should_expand`               |
 
 ## 2. Подробно по каждому
 
@@ -76,12 +83,65 @@
 
 ### `TOP_K`
 
-- **Что**: сколько чанков извлекаем из FAISS на запрос.
-- **Текущее**: `5`.
+- **Что**: сколько чанков уходит в финальный промпт LLM.
+- **Текущее**: `5`. Используется и старым `rag/query.py::retrieve`, и новым `rag/search_engine.py::search` (как `top_k` после реранкера).
 - **Влияние**:
   - Меньше → быстрее, меньше «шума» в контексте, но риск пропустить нужный фрагмент.
   - Больше → больше контекста, выше шанс найти ответ, но дольше LLM-генерация и больше галлюцинаций при шумных данных.
 - **Рекомендации**: 3–10. Совместно с `CHUNK_SIZE` определяет общий объём контекста.
+
+### `HYBRID_ENABLED`
+
+- **Что**: глобальный флаг гибридного поиска.
+- **Текущее**: `True`. В первой версии MVP `hybrid_retrieve` всегда строит BM25 рядом с FAISS — параметр зарезервирован под полное отключение в случае деградации.
+- **Влияние**: при будущей правке `False` будет возвращать чисто векторный top-`TOP_K_HYBRID` без BM25 и без RRF (см. § 7 «Риски» в спринте 01).
+- **Рекомендации**: оставлять `True`, пока нет деградации на реальных русскоязычных запросах.
+
+### `TOP_K_HYBRID`
+
+- **Что**: размер top-N от гибридного слияния (вход реранкера).
+- **Текущее**: `20`.
+- **Влияние**:
+  - Меньше (10) → быстрее реранк, выше риск отсечь правильный фрагмент.
+  - Больше (50) → точнее ранжирование, но реранк линейно медленнее.
+- **Рекомендации**: 10–40. На CPU с `BAAI/bge-reranker-base` 20 даёт ~200 мс реранка.
+
+### `RRF_K`
+
+- **Что**: константа Reciprocal Rank Fusion (Cormack & Clarke 2009).
+- **Текущее**: `60` — каноническое значение из исходной публикации, эмпирически устойчивое.
+- **Влияние**: меньше → больше «веса» у первых рангов в каждом списке, чувствительнее к ошибке топ-1; больше → плавнее, но топовые позиции теряют выраженность.
+- **Рекомендации**: 60 в подавляющем большинстве сценариев. Менять только если есть конкретная гипотеза о деградации.
+
+### `RERANK_ENABLED`
+
+- **Что**: включает/выключает cross-encoder реранкер.
+- **Текущее**: `True`.
+- **Влияние**: при `False` фасад `search` возвращает первые `TOP_K` чанков из гибридного списка по RRF (без cross-encoder). Полезно, чтобы быстро откатиться при подозрении на деградацию.
+- **Рекомендации**: `True` для прод-качества, `False` — для отладки и A/B сравнения.
+
+### `RERANKER_MODEL`
+
+- **Что**: имя HuggingFace-модели cross-encoder.
+- **Текущее**: `"BAAI/bge-reranker-base"` (~278 МБ, English-leaning, но работает и на коротких русских запросах).
+- **Альтернативы**:
+  - `BAAI/bge-reranker-large` — крупнее (~560 МБ), точнее, медленнее.
+  - `cross-encoder/ms-marco-MiniLM-L-6-v2` — лёгкая (~80 МБ), хуже качество.
+- **Важно**: первая загрузка скачивает модель в `~/.cache/huggingface/`. Смена модели не требует пересборки FAISS-индекса (cross-encoder работает поверх кандидатов).
+
+### `QUERY_EXPANSION_ENABLED`
+
+- **Что**: глобальный флаг LLM-переформулировки запросов.
+- **Текущее**: `True`.
+- **Влияние**: при `False` `maybe_expand_query` всегда возвращает `(query, None)` — `search` ходит только за оригиналом. Полезно отключить при отладке, чтобы исключить нестабильность LLM-вывода.
+- **Рекомендации**: `True` для коротких/аббревиатурных запросов; на длинных запросах эвристика и так пропускает expansion.
+
+### `QUERY_EXPANSION_MIN_TOKENS`
+
+- **Что**: порог длины запроса в словах, при котором expansion срабатывает «по умолчанию».
+- **Текущее**: `4`.
+- **Влияние**: запросы из ≤ N слов всегда отправляются в LLM на расширение; более длинные — только если содержат явную аббревиатуру (`XSS`, `RBAC`, `403`).
+- **Рекомендации**: 3–5. Слишком большое значение — лишние LLM-вызовы на нормальных запросах; слишком маленькое — нет выгоды для коротких.
 
 ## 3. Профили настроек (рекомендованные пресеты)
 
