@@ -291,7 +291,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 ### Задача 2.1. Утвердить спецификацию Advanced Pipeline
 
-- **Статус:** ToDo
+- **Статус:** Progress
 - **Приоритет:** high
 - **Объём:** XS
 - **Зависит от:** Задача 1.3.
@@ -568,7 +568,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 | 1.1   | Зафиксировать рабочую ветку и записать старт спринта                                                                       | high      | XS    | Done   | —          |
 | 1.2   | Impact Analysis текущего поиска (As-Is)                                                                                    | high      | S     | Done   | 1.1        |
 | 1.3   | Логирование score в `retrieve`                                                                                             | high      | S     | Done   | 1.2        |
-| 2.1   | Утвердить спецификацию Advanced Pipeline                                                                                   | high      | XS    | ToDo   | 1.3        |
+| 2.1   | Утвердить спецификацию Advanced Pipeline                                                                                   | high      | XS    | Progress | 1.3      |
 | 3.1   | Hybrid Search (BM25 + Vector + RRF)                                                                                        | high      | M     | ToDo   | 2.1        |
 | 3.2   | Reranker (cross-encoder)                                                                                                   | high      | M     | ToDo   | 3.1        |
 | 3.3   | Query Expansion (LLM rewrite)                                                                                              | medium    | M     | ToDo   | 3.2        |
