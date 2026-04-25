@@ -343,7 +343,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 ### Задача 3.1. Hybrid Search (BM25 + Vector + RRF)
 
-- **Статус:** Progress
+- **Статус:** Done
 - **Приоритет:** high
 - **Объём:** M
 - **Зависит от:** Задача 2.1.
@@ -368,12 +368,12 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 #### Definition of Done
 
-- [ ] `src/rag/search_engine.py` существует, импортируется без ошибок (`python -c "from rag.search_engine import hybrid_retrieve; print('OK')"` из `src/`).
-- [ ] `pip install -r src/requirements.txt` ставит `rank_bm25` без конфликтов.
-- [ ] `python -c "from rag.search_engine import hybrid_retrieve; r = hybrid_retrieve('test query'); print(len(r), r[0]['score'])"` отрабатывает на собранном индексе.
-- [ ] Smoke-тест на 3 запросах (1 обычный, 1 с точным кодом «403 Forbidden», 1 русский) — каждый возвращает непустой список с полем `score`.
-- [ ] MCP-инструменты не затронуты (`git diff src/mcp/` пустой).
-- [ ] `_docs/rag-pipeline.md` обновлён: упомянут гибридный поиск.
+- [x] `src/rag/search_engine.py` существует, импортируется без ошибок (`python -c "from rag.search_engine import hybrid_retrieve; print('OK')"` из `src/`).
+- [x] `pip install -r src/requirements.txt` ставит `rank_bm25` без конфликтов.
+- [x] `python -c "from rag.search_engine import hybrid_retrieve; r = hybrid_retrieve('test query'); print(len(r), r[0]['score'])"` отрабатывает на собранном индексе.
+- [x] Smoke-тест на 3 запросах (1 обычный, 1 с точным кодом «403 Forbidden», 1 русский) — каждый возвращает непустой список с полем `score`.
+- [x] MCP-инструменты не затронуты (`git diff src/mcp/` пустой).
+- [x] `_docs/rag-pipeline.md` обновлён: упомянут гибридный поиск.
 
 ---
 
@@ -569,7 +569,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 | 1.2   | Impact Analysis текущего поиска (As-Is)                                                                                    | high      | S     | Done   | 1.1        |
 | 1.3   | Логирование score в `retrieve`                                                                                             | high      | S     | Done   | 1.2        |
 | 2.1   | Утвердить спецификацию Advanced Pipeline                                                                                   | high      | XS    | Done   | 1.3        |
-| 3.1   | Hybrid Search (BM25 + Vector + RRF)                                                                                        | high      | M     | Progress | 2.1      |
+| 3.1   | Hybrid Search (BM25 + Vector + RRF)                                                                                        | high      | M     | Done   | 2.1        |
 | 3.2   | Reranker (cross-encoder)                                                                                                   | high      | M     | ToDo   | 3.1        |
 | 3.3   | Query Expansion (LLM rewrite)                                                                                              | medium    | M     | ToDo   | 3.2        |
 | 3.4   | Переключить `CompanyKBAssistant` на новый фасад                                                                            | high      | S     | ToDo   | 3.3        |
