@@ -26,3 +26,7 @@ TOP_K = 5
 HYBRID_ENABLED = True
 TOP_K_HYBRID = 20         # candidates kept after hybrid merge (input to reranker)
 RRF_K = 60                # canonical Cormack & Clarke (2009) constant
+
+# Reranker: cross-encoder applied to the hybrid candidates, top_k=TOP_K kept.
+RERANK_ENABLED = True
+RERANKER_MODEL = "BAAI/bge-reranker-base"

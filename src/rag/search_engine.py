@@ -42,7 +42,13 @@ from rank_bm25 import BM25Okapi
 # Make ``config`` importable when this module is loaded as ``rag.search_engine``
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import RRF_K, TOP_K_HYBRID  # noqa: E402
+from config import (  # noqa: E402
+    RERANK_ENABLED,
+    RERANKER_MODEL,
+    RRF_K,
+    TOP_K,
+    TOP_K_HYBRID,
+)
 from rag import query as _query  # noqa: E402  (reuse FAISS index + embedder)
 
 
@@ -183,3 +189,80 @@ def hybrid_retrieve(query: str, top_n: int = TOP_K_HYBRID) -> List[dict]:
         {**chunks[idx], "score": float(rrf_score)}
         for idx, rrf_score in merged
     ]
+
+
+# ---------------------------------------------------------------------------
+# Cross-encoder reranker
+# ---------------------------------------------------------------------------
+
+_reranker = None  # lazy-initialised CrossEncoder instance
+
+
+def _ensure_reranker():
+    """Lazily load the cross-encoder model.
+
+    The first call downloads ``RERANKER_MODEL`` from HuggingFace if not cached.
+    Returns ``None`` if the model cannot be loaded — callers must fall back
+    to the unreranked candidates.
+    """
+    global _reranker
+    if _reranker is not None:
+        return _reranker
+    try:
+        from sentence_transformers import CrossEncoder
+
+        _reranker = CrossEncoder(RERANKER_MODEL)
+    except Exception as exc:  # pragma: no cover — best-effort fallback
+        print(f"⚠️  Reranker unavailable ({exc}); falling back to hybrid order.")
+        _reranker = None
+    return _reranker
+
+
+def rerank(query: str, candidates: List[dict], top_k: int = TOP_K) -> List[dict]:
+    """Re-rank ``candidates`` with a cross-encoder, return top-``top_k``.
+
+    The returned dicts replace ``score`` with the cross-encoder logit
+    (higher = more relevant). If the reranker is disabled or fails to load,
+    the function silently falls back to the first ``top_k`` candidates as
+    they came in (already RRF-ordered by ``hybrid_retrieve``).
+    """
+    if not candidates:
+        return []
+    if not RERANK_ENABLED:
+        return candidates[:top_k]
+
+    model = _ensure_reranker()
+    if model is None:
+        return candidates[:top_k]
+
+    pairs = [(query, c["text"]) for c in candidates]
+    scores = model.predict(pairs)
+    ranked = sorted(zip(candidates, scores), key=lambda p: p[1], reverse=True)
+    return [
+        {**c, "score": float(s)}
+        for c, s in ranked[:top_k]
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Public facade
+# ---------------------------------------------------------------------------
+
+
+def search(query: str, top_k: int = TOP_K) -> List[dict]:
+    """Run the advanced search pipeline and return top-``top_k`` chunks.
+
+    Stages:
+
+    1. ``hybrid_retrieve(query, TOP_K_HYBRID)`` — BM25 + Vector + RRF.
+    2. ``rerank(query, candidates, top_k)`` — cross-encoder rerank
+       (skipped when ``RERANK_ENABLED`` is ``False``).
+
+    Each returned dict carries ``text``, ``source``, ``chunk_id`` and a
+    ``score`` field whose meaning depends on the last stage that ran
+    (rerank logit if the reranker was used, RRF score otherwise).
+    """
+    candidates = hybrid_retrieve(query, TOP_K_HYBRID)
+    if not RERANK_ENABLED:
+        return candidates[:top_k]
+    return rerank(query, candidates, top_k)
