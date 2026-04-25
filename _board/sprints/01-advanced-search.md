@@ -74,7 +74,7 @@
 
 ### Задача 1.1. Зафиксировать рабочую ветку и записать старт спринта
 
-- **Статус:** Progress
+- **Статус:** Done
 - **Приоритет:** high
 - **Объём:** XS
 - **Зависит от:** —
@@ -87,9 +87,9 @@
 
 #### Definition of Done
 
-- [ ] `git branch --show-current` возвращает `feature/advanced-search-pipeline`.
-- [ ] Ветка запушена: `git push -u origin feature/advanced-search-pipeline`.
-- [ ] В `_board/progress.txt` есть запись от текущей даты с заголовком «Старт спринта 01».
+- [x] `git branch --show-current` возвращает `feature/advanced-search-pipeline`.
+- [x] Ветка запушена: `git push -u origin feature/advanced-search-pipeline`.
+- [x] В `_board/progress.txt` есть запись от текущей даты с заголовком «Старт спринта 01».
 
 ---
 
@@ -565,7 +565,7 @@ contexts (Top-K с полем score) → build_prompt → ask_llm → answer
 
 | #     | Задача                                                                                                                     | Приоритет | Объём | Статус | Зависит от |
 |-------|----------------------------------------------------------------------------------------------------------------------------|:---------:|:-----:|:------:|:----------:|
-| 1.1   | Зафиксировать рабочую ветку и записать старт спринта                                                                       | high      | XS    | Progress | —        |
+| 1.1   | Зафиксировать рабочую ветку и записать старт спринта                                                                       | high      | XS    | Done   | —          |
 | 1.2   | Impact Analysis текущего поиска (As-Is)                                                                                    | high      | S     | ToDo   | 1.1        |
 | 1.3   | Логирование score в `retrieve`                                                                                             | high      | S     | ToDo   | 1.2        |
 | 2.1   | Утвердить спецификацию Advanced Pipeline                                                                                   | high      | XS    | ToDo   | 1.3        |
