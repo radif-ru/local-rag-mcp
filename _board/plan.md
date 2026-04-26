@@ -190,6 +190,6 @@
 |------------------------------|:------:|:------------------------------:|-----------------------------------|
 | 00. Bootstrap                | Closed | 0 / 0 / 1                      | `sprints/00-bootstrap.md`         |
 | 01. Advanced Search Pipeline | Closed | 0 / 0 / 10                     | `sprints/01-advanced-search.md`   |
-| 02. Quality Baseline         | Active | 11 / 0 / 4                     | `sprints/02-quality-baseline.md`  |
+| 02. Quality Baseline         | Active | 12 / 0 / 4                     | `sprints/02-quality-baseline.md`  |
 
 > Таблицу обновлять одновременно с переходами статусов в файлах спринтов.
