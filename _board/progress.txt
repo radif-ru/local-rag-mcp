@@ -117,3 +117,29 @@ Smoke-итоги (4 чанка тестового корпуса, qwen3:0.6b):
 MCP-контракт не менялся (src/mcp/* пусто в diff).
 
 Ветка feature/advanced-search-pipeline запушена; готова к merge в main.
+
+
+----- 2026-04-26 Старт спринта 02: Quality Baseline -----
+
+Получено ТЗ от пользователя. Скоуп — закрытие инфраструктурных долгов:
+
+  1) Документация и правила процесса
+       - _docs/links.md (внешние ссылки)
+       - _docs/legacy.md (тонкий указатель на current-state.md §2 + roadmap.md)
+       - правило «новый спринт = новая ветка» в plan.md, instructions.md, board/README.md
+  2) Логирование
+       - единая logging-инфраструктура (src/log_config.py + KB_LOG_LEVEL)
+       - print → logger в rag/*, mcp/*, assistant.py, main.py
+       - UI-print остаётся только в main.py-цикле и assistant.py::__main__
+  3) Обработка ошибок
+       - таймауты в requests.post (ask_llm) и MCPClient._send
+       - чтение stderr MCP-сервера
+       - унификация ошибок верхнего уровня (без traceback пользователю)
+  4) Тесты
+       - pytest + pytest-mock, tests/ с зеркалированием src/
+       - покрытие rag/chunk, rag/query, rag/search_engine, mcp/server, assistant.py
+
+Ветка: feature/quality-baseline (создана от main, this commit).
+Файл спринта: _board/sprints/02-quality-baseline.md, 14 задач (2.1.1 — 2.4.5),
+все ToDo. Реализация задач начнётся после явного перевода первой задачи в
+Progress (см. _board/process.md § 3).
