@@ -30,6 +30,10 @@
 - [`commands.md`](./commands.md) — команды CLI, MCP-инструменты, поведение интерактивного режима.
 - [`instructions.md`](./instructions.md) — правила разработки: стиль, git, тесты, ошибки, безопасность.
 
+### Справочное
+
+- [`links.md`](./links.md) — каталог ссылок на внешнюю документацию используемых библиотек, моделей и протоколов (Ollama, FAISS, sentence-transformers, FastMCP, rank_bm25, RRF и др.).
+
 ## Порядок чтения
 
 1. **Новый агент / разработчик на проекте**: `CLAUDE.md` → `project.md` → `architecture.md` → `project-structure.md` → `current-state.md` → `roadmap.md`.
