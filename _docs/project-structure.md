@@ -25,6 +25,7 @@ local-rag-mcp/
 │   ├── instructions.md       # Правила разработки
 │   ├── current-state.md      # Текущее состояние, известные проблемы
 │   ├── roadmap.md            # План развития
+│   ├── legacy.md             # Указатель на технический долг (ссылки в current-state.md § 2 и roadmap.md)
 │   └── links.md              # Каталог ссылок на внешнюю документацию
 │
 ├── _board/                   # Доска процесса для LLM-агента
