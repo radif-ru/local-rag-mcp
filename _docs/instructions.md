@@ -90,6 +90,7 @@ from config import ...
 
 - Основная ветка — `main`.
 - Рабочие ветки — `feature/<краткое-имя>`, `fix/<краткое-имя>`, `task-<id>-<имя>`.
+- **Новый спринт открывается в новой ветке** `feature/<short-name>` от актуальной `main` (см. `_board/plan.md` § «Правила работы со спринтами», п.2). Merge в `main` — после закрытия спринта.
 - Коммиты — атомарные, в императиве, на английском (как принято в open-source):
   - `feat(rag): add chunk overlap configuration`
   - `fix(mcp): handle empty arguments in read_document`
